@@ -3,14 +3,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter
-} from "@/components/ui/dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -104,7 +96,7 @@ export default function SchedulingPage() {
     const workHours = workTime / 60;
 
     return Object.entries(stats).map(([descripcion, data]) => {
-      const unitsPerHour = (numOperatives * levelingUnit) / data.totalSam;
+      const unitsPerHour = data.totalSam > 0 ? (numOperatives * levelingUnit) / data.totalSam : 0;
       return {
         descripcion,
         totalSam: data.totalSam,
@@ -144,7 +136,7 @@ export default function SchedulingPage() {
         <p className="text-muted-foreground">Configure operarios, seleccione órdenes y prepárese para la asignación de tareas.</p>
       </div>
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base">Configuración</CardTitle></CardHeader>
           <CardContent className="grid gap-2">
@@ -163,44 +155,31 @@ export default function SchedulingPage() {
             <Input id="package-size" type="number" value={packageSize} onChange={e => setPackageSize(parseInt(e.target.value))} />
           </CardContent>
         </Card>
-        <Card className="lg:col-span-2 flex flex-col justify-center">
-            <CardContent className="pt-6 grid grid-cols-2 gap-4">
-               <Dialog>
-                <DialogTrigger asChild>
-                    <Button variant="outline" className="w-full" disabled={!isAnyOrderSelected}>
-                        <Calculator className="mr-2" />
-                        Estadísticas Iniciales
-                    </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-xl">
-                    <DialogHeader>
-                    <DialogTitle>Estadísticas Iniciales</DialogTitle>
-                    <CardDescription>Cálculos basados en las órdenes de producción seleccionadas.</CardDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                        {initialStats.map(stat => (
-                            <div key={stat.descripcion}>
-                                <h3 className="font-bold text-lg">{stat.descripcion}</h3>
-                                <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
-                                    <p><strong>Tamaño de Lote:</strong></p><p>{stat.loteSize.toFixed(0)}</p>
-                                    <p><strong>SAM Total Producto:</strong></p><p>{stat.totalSam.toFixed(2)} min</p>
-                                    <p><strong>Unidades por Hora (est.):</strong></p><p>{stat.unitsPerHour.toFixed(2)}</p>
-                                    <p><strong>Unidades por Día (est.):</strong></p><p>{stat.unitsPerDay.toFixed(2)}</p>
-                                </div>
-                                <Separator className="my-4"/>
+        <Card className="md:col-span-2 flex flex-col">
+            <CardHeader className="pb-2">
+                <CardTitle className="text-base">Estadísticas Iniciales</CardTitle>
+                <CardDescription>Cálculos basados en las órdenes seleccionadas.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1 space-y-4 overflow-y-auto">
+                {isAnyOrderSelected && initialStats.length > 0 ? (
+                    initialStats.map((stat, index) => (
+                        <div key={stat.descripcion}>
+                            <h3 className="font-bold">{stat.descripcion}</h3>
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1 text-sm">
+                                <p>Tamaño de Lote:</p><p className="text-right font-medium">{stat.loteSize.toFixed(0)}</p>
+                                <p>SAM Total Producto:</p><p className="text-right font-medium">{stat.totalSam.toFixed(2)} min</p>
+                                <p>Unidades/Hora (est.):</p><p className="text-right font-medium">{stat.unitsPerHour.toFixed(2)}</p>
+                                <p>Unidades/Día (est.):</p><p className="text-right font-medium">{stat.unitsPerDay.toFixed(2)}</p>
                             </div>
-                        ))}
-                    </div>
-                     <DialogFooter>
-                        <p className="text-xs text-muted-foreground">Estas son estimaciones iniciales. La producción real puede variar.</p>
-                    </DialogFooter>
-                </DialogContent>
-                </Dialog>
-                <Button className="w-full bg-primary text-primary-foreground hover:bg-primary-foreground/90" disabled={!isAnyOrderSelected} onClick={handleLevelJobs}>
-                    Nivelar Trabajos <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-                {!isAnyOrderSelected && <p className="text-xs text-center mt-2 text-muted-foreground col-span-2">Seleccione al menos una orden para ver estadísticas o nivelar.</p>}
-          </CardContent>
+                            {index < initialStats.length - 1 && <Separator className="my-2"/>}
+                        </div>
+                    ))
+                ) : (
+                   <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                        <p>Seleccione una orden para ver las estadísticas.</p>
+                   </div>
+                )}
+            </CardContent>
         </Card>
       </div>
 
@@ -230,6 +209,9 @@ export default function SchedulingPage() {
                       <TableCell>{order.fechaEntrega}</TableCell>
                     </TableRow>
                   ))}
+                  {availableOrders.length === 0 && (
+                      <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground h-24">No hay órdenes creadas. Ve a la sección de Órdenes.</TableCell></TableRow>
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -239,10 +221,10 @@ export default function SchedulingPage() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>2. Carga de Trabajo Requerida</CardTitle>
-            <CardDescription>Minutos Estándar Permitidos (SAM) totales para las órdenes seleccionadas.</CardDescription>
+            <CardDescription>SAM totales para las órdenes seleccionadas.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="border rounded-md">
+          <CardContent className="space-y-4">
+            <div className="border rounded-md max-h-80 overflow-y-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -257,11 +239,14 @@ export default function SchedulingPage() {
                       <TableCell className="text-right">{item.totalSam.toFixed(2)}</TableCell>
                     </TableRow>
                   )) : (
-                    <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground">No hay órdenes seleccionadas</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground h-24">No hay órdenes seleccionadas</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
             </div>
+            <Button className="w-full" disabled={!isAnyOrderSelected} onClick={handleLevelJobs}>
+                Nivelar Trabajos <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
           </CardContent>
         </Card>
       </div>
