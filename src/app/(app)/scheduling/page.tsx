@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -15,6 +16,8 @@ import { ArrowRight, Calculator } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 const ORDERS_LOCAL_STORAGE_KEY = 'productionOrders';
+const SCHEDULING_STATS_KEY = 'schedulingInitialStats';
+
 
 interface ProductStats {
   descripcion: string;
@@ -32,11 +35,16 @@ export default function SchedulingPage() {
   const [packageSize, setPackageSize] = useState(10);
   const [selectedOrders, setSelectedOrders] = useState<Record<string, boolean>>({});
   const [availableOrders, setAvailableOrders] = useState<ProductionOrder[]>([]);
+  const [initialStats, setInitialStats] = useState<ProductStats[]>([]);
 
   useEffect(() => {
     const storedOrders = localStorage.getItem(ORDERS_LOCAL_STORAGE_KEY);
     if (storedOrders) {
       setAvailableOrders(JSON.parse(storedOrders));
+    }
+    const storedStats = localStorage.getItem(SCHEDULING_STATS_KEY);
+    if (storedStats) {
+      setInitialStats(JSON.parse(storedStats));
     }
   }, []);
 
@@ -74,9 +82,15 @@ export default function SchedulingPage() {
     return Object.entries(totals).map(([operation, totalSam]) => ({ operation, totalSam }));
   }, [tasksToSchedule]);
   
-  const initialStats: ProductStats[] = useMemo(() => {
+  useEffect(() => {
     const stats: Record<string, { totalSam: number; loteSize: number, products: Product[] }> = {};
     const selectedOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
+
+    if (selectedOrderIds.length === 0) {
+      setInitialStats([]);
+      localStorage.removeItem(SCHEDULING_STATS_KEY);
+      return;
+    }
 
     availableOrders
       .filter(order => selectedOrderIds.includes(order.id))
@@ -96,7 +110,7 @@ export default function SchedulingPage() {
 
     const workHours = workTime / 60;
 
-    return Object.entries(stats).map(([descripcion, data]) => {
+    const calculatedStats = Object.entries(stats).map(([descripcion, data]) => {
       const unitsPerHour = data.totalSam > 0 ? (numOperatives * levelingUnit) / data.totalSam : 0;
       return {
         descripcion,
@@ -106,6 +120,9 @@ export default function SchedulingPage() {
         unitsPerDay: unitsPerHour * workHours
       };
     });
+
+    setInitialStats(calculatedStats);
+    localStorage.setItem(SCHEDULING_STATS_KEY, JSON.stringify(calculatedStats));
   }, [selectedOrders, availableOrders, numOperatives, levelingUnit, workTime]);
 
 
@@ -156,41 +173,31 @@ export default function SchedulingPage() {
             <Input id="package-size" type="number" value={packageSize} onChange={e => setPackageSize(parseInt(e.target.value))} />
           </CardContent>
         </Card>
-        <div className="md:col-span-2 flex flex-col gap-4">
-             <Dialog>
-                <DialogTrigger asChild>
-                    <Button variant="outline" disabled={!isAnyOrderSelected}>
-                        <Calculator className="mr-2 h-4 w-4" />
-                        Estadísticas Iniciales
-                    </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Estadísticas Iniciales</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                        {isAnyOrderSelected && initialStats.length > 0 ? (
-                            initialStats.map((stat, index) => (
-                                <div key={stat.descripcion}>
-                                    <h3 className="font-bold">{stat.descripcion}</h3>
-                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1 text-sm">
-                                        <p>Tamaño de Lote:</p><p className="text-right font-medium">{stat.loteSize.toFixed(0)}</p>
-                                        <p>SAM Total Producto:</p><p className="text-right font-medium">{stat.totalSam.toFixed(2)} min</p>
-                                        <p>Unidades/Hora (est.):</p><p className="text-right font-medium">{stat.unitsPerHour.toFixed(2)}</p>
-                                        <p>Unidades/Día (est.):</p><p className="text-right font-medium">{stat.unitsPerDay.toFixed(2)}</p>
-                                    </div>
-                                     {index < initialStats.length - 1 && <Separator className="my-2"/>}
+        <Card className="md:col-span-2">
+            <CardHeader className="pb-2"><CardTitle className="text-base">Estadísticas Iniciales</CardTitle></CardHeader>
+            <CardContent>
+                 <div className="space-y-4">
+                    {isAnyOrderSelected && initialStats.length > 0 ? (
+                        initialStats.map((stat, index) => (
+                            <div key={stat.descripcion}>
+                                <h3 className="font-bold">{stat.descripcion}</h3>
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1 text-sm">
+                                    <p>Tamaño de Lote:</p><p className="text-right font-medium">{stat.loteSize.toFixed(0)}</p>
+                                    <p>SAM Total Producto:</p><p className="text-right font-medium">{stat.totalSam.toFixed(2)} min</p>
+                                    <p>Unidades/Hora (est.):</p><p className="text-right font-medium">{stat.unitsPerHour.toFixed(2)}</p>
+                                    <p>Unidades/Día (est.):</p><p className="text-right font-medium">{stat.unitsPerDay.toFixed(2)}</p>
                                 </div>
-                            ))
-                        ) : (
-                           <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-                                <p>Seleccione una orden para ver las estadísticas.</p>
-                           </div>
-                        )}
-                    </div>
-                </DialogContent>
-            </Dialog>
-        </div>
+                                 {index < initialStats.length - 1 && <Separator className="my-2"/>}
+                            </div>
+                        ))
+                    ) : (
+                       <div className="flex items-center justify-center h-full text-sm text-muted-foreground p-4">
+                            <p>Seleccione una orden para ver las estadísticas.</p>
+                       </div>
+                    )}
+                </div>
+            </CardContent>
+        </Card>
       </div>
 
       <div className="grid lg:grid-cols-5 gap-6">
@@ -263,3 +270,5 @@ export default function SchedulingPage() {
     </div>
   );
 }
+
+    
