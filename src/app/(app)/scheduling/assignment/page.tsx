@@ -43,6 +43,9 @@ export default function AssignmentPage() {
             if (typeof task.consecutivo !== 'number') task.consecutivo = 0;
             if (typeof task.maquina !== 'string') task.maquina = 'N/A';
           });
+          if (!parsedData.unitsPerHour) {
+            parsedData.unitsPerHour = {};
+          }
           setData(parsedData);
         } else {
           throw new Error("Invalid data structure");
@@ -98,21 +101,18 @@ export default function AssignmentPage() {
 
     let totalUnitSam = 0;
     let totalTasks = 0;
-    const timePerPackageByTask: Record<string, number> = {};
+    let totalPackageTime = 0;
 
 
     data.tasks.forEach(task => {
       totalTasks++;
       totalUnitSam += task.unitSam;
-      timePerPackageByTask[task.id] = task.unitSam * data.packageSize;
+      totalPackageTime += task.unitSam * data.packageSize;
       data.operatives.forEach(op => {
         const assignedSam = assignments[task.id]?.[op.id] || 0;
         operativeTotals[op.id] += assignedSam;
       });
     });
-
-    const totalPackageTime = Object.values(timePerPackageByTask).reduce((sum, val) => sum + val, 0);
-
 
     return { 
       totalTasks,
@@ -197,7 +197,7 @@ export default function AssignmentPage() {
              <Card>
                 <CardHeader>
                     <CardTitle>Prenda: {productName}</CardTitle>
-                    <CardDescription>Tamaño de paquete: {data.packageSize} | Tiempo de Nivelación: {data.levelingUnit} min | Unidades/Hora: {data.unitsPerHour[productName]?.toFixed(2) || 'N/A'}</CardDescription>
+                    <CardDescription>Tamaño de paquete: {data.packageSize} | Tiempo de Nivelación: {data.levelingUnit} min | Unidades/Hora: {data.unitsPerHour?.[productName]?.toFixed(2) || 'N/A'}</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
@@ -218,7 +218,7 @@ export default function AssignmentPage() {
                       </TableHeader>
                       <TableBody>
                         {tasksByProduct[productName].sort((a, b) => a.consecutivo - b.consecutivo).map(task => {
-                          const unitsPerHour = data.unitsPerHour[productName] || 0;
+                          const unitsPerHour = data.unitsPerHour?.[productName] || 0;
                           const requiredSam = task.unitSam * unitsPerHour;
                           const assigned = Object.values(assignments[task.id] || {}).reduce((sum, val) => sum + val, 0);
                           const isBalanced = Math.abs(assigned - requiredSam) < 0.01 && requiredSam > 0;
@@ -250,11 +250,11 @@ export default function AssignmentPage() {
                           );
                         })}
                       </TableBody>
-                       <TableFooter>
+                      <TableFooter>
                         <TableRow className="bg-secondary/70 hover:bg-secondary/70 font-bold">
                             <TableCell colSpan={3} className="sticky left-0 bg-secondary/70 z-10">Totales</TableCell>
-                            <TableCell className="text-right">{summaryTotals.totalUnitSam.toFixed(2)}</TableCell>
-                            <TableCell className="text-right">{summaryTotals.totalPackageTime.toFixed(2)}</TableCell>
+                            <TableCell className="text-right">{tasksByProduct[productName].reduce((sum, task) => sum + task.unitSam, 0).toFixed(2)}</TableCell>
+                            <TableCell className="text-right">{tasksByProduct[productName].reduce((sum, task) => sum + (task.unitSam * data.packageSize), 0).toFixed(2)}</TableCell>
                             <TableCell colSpan={2}></TableCell>
                             {data.operatives.map(op => {
                                 const totalMinutes = summaryTotals.operativeTotals[op.id] || 0;
