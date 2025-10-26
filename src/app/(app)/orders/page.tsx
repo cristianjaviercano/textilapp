@@ -12,10 +12,9 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -41,6 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 
 const initialOrderState: Omit<ProductionOrder, "id"> = {
   nombreCliente: "",
@@ -55,16 +55,27 @@ export default function OrdersPage() {
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<Partial<ProductionOrder> | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<ProductionOrder | null>(null);
-  
+  const { toast } = useToast();
+
   const productReferences = useMemo(() => {
     const refs = mockProducts.map(p => p.referencia);
     return [...new Set(refs)];
   }, []);
 
+  const flattenedOrders = useMemo(() => {
+    return orders.flatMap(order => 
+      order.items.map(item => ({
+        ...order,
+        ...item,
+        orderId: order.id
+      }))
+    );
+  }, [orders]);
+
   const isEditing = currentOrder && currentOrder.id;
 
   const handleOpenDialog = (order?: ProductionOrder) => {
-    setCurrentOrder(order || initialOrderState);
+    setCurrentOrder(order ? { ...order } : { ...initialOrderState, items: [{ referencia: '', cantidad: 1 }] });
     setIsDialogOpen(true);
   };
   
@@ -76,28 +87,45 @@ export default function OrdersPage() {
   };
 
   const handleRemoveItem = (index: number) => {
-    if (currentOrder && currentOrder.items) {
+    if (currentOrder && currentOrder.items && currentOrder.items.length > 1) {
       const newItems = [...currentOrder.items];
       newItems.splice(index, 1);
       setCurrentOrder({ ...currentOrder, items: newItems });
+    } else {
+        toast({
+            variant: "destructive",
+            title: "Acción no permitida",
+            description: "Una orden debe tener al menos un item.",
+        });
     }
   };
 
   const handleItemChange = (index: number, field: keyof OrderItem, value: string | number) => {
     if (currentOrder && currentOrder.items) {
       const newItems = [...currentOrder.items];
-      (newItems[index] as any)[field] = value;
+      const updatedItem = { ...newItems[index], [field]: value };
+      newItems[index] = updatedItem;
       setCurrentOrder({ ...currentOrder, items: newItems });
     }
   };
 
   const handleSaveChanges = () => {
-    if (!currentOrder) return;
+    if (!currentOrder || !currentOrder.nombreCliente || !currentOrder.fechaEntrega || !currentOrder.items?.every(item => item.referencia && item.cantidad > 0)) {
+        toast({
+            variant: "destructive",
+            title: "Campos incompletos",
+            description: "Por favor, complete todos los campos de la orden y sus items.",
+        });
+        return;
+    }
+    
     if (isEditing) {
       setOrders(orders.map((o) => (o.id === currentOrder.id ? (currentOrder as ProductionOrder) : o)));
+       toast({ title: "Orden Actualizada", description: `La orden ${currentOrder.id} ha sido actualizada.` });
     } else {
       const newOrder: ProductionOrder = { ...currentOrder, id: `ORD-${Date.now()}` } as ProductionOrder;
       setOrders([newOrder, ...orders]);
+      toast({ title: "Orden Creada", description: `La nueva orden ${newOrder.id} ha sido creada.` });
     }
     setIsDialogOpen(false);
     setCurrentOrder(null);
@@ -113,6 +141,7 @@ export default function OrdersPage() {
       setOrders(orders.filter((o) => o.id !== orderToDelete.id));
       setIsAlertOpen(false);
       setOrderToDelete(null);
+      toast({ title: "Orden Eliminada", description: `La orden ${orderToDelete.id} ha sido eliminada.` });
     }
   };
 
@@ -135,28 +164,34 @@ export default function OrdersPage() {
             <TableRow>
               <TableHead>ID Orden</TableHead>
               <TableHead>Cliente</TableHead>
-              <TableHead>Items</TableHead>
+              <TableHead>Referencia</TableHead>
+              <TableHead className="text-right">Cantidad</TableHead>
               <TableHead>Fecha Entrega</TableHead>
               <TableHead>Prioridad</TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {orders.map((order) => (
-              <TableRow key={order.id}>
-                <TableCell className="font-medium">{order.id}</TableCell>
-                <TableCell>{order.nombreCliente}</TableCell>
-                <TableCell>{order.items.reduce((acc, item) => acc + item.cantidad, 0)}</TableCell>
-                <TableCell>{order.fechaEntrega}</TableCell>
-                <TableCell><Badge variant="secondary">{order.prioridad}</Badge></TableCell>
+            {flattenedOrders.map((item, index) => (
+              <TableRow key={`${item.orderId}-${index}`}>
+                <TableCell className="font-medium">{item.orderId}</TableCell>
+                <TableCell>{item.nombreCliente}</TableCell>
+                <TableCell>{item.referencia}</TableCell>
+                <TableCell className="text-right">{item.cantidad}</TableCell>
+                <TableCell>{item.fechaEntrega}</TableCell>
+                <TableCell><Badge variant={item.prioridad === 1 ? "destructive" : "secondary"}>{item.prioridad}</Badge></TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleOpenDialog(order)}><Pencil className="mr-2 h-4 w-4"/> Editar</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleOpenAlert(order)} className="text-red-500 focus:text-red-500"><Trash2 className="mr-2 h-4 w-4"/> Borrar</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleOpenDialog(orders.find(o => o.id === item.orderId))}>
+                        <Pencil className="mr-2 h-4 w-4"/> Editar Orden
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleOpenAlert(orders.find(o => o.id === item.orderId)!)} className="text-red-500 focus:text-red-500">
+                        <Trash2 className="mr-2 h-4 w-4"/> Borrar Orden
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
@@ -172,23 +207,33 @@ export default function OrdersPage() {
             <DialogTitle>{isEditing ? "Editar Orden" : "Añadir Nueva Orden"}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
-            <div className="space-y-2"><Label>Nombre Cliente</Label><Input value={currentOrder?.nombreCliente || ''} onChange={(e) => setCurrentOrder({...currentOrder, nombreCliente: e.target.value })} /></div>
-            <div className="space-y-2"><Label>Fecha Entrega</Label><Input type="date" value={currentOrder?.fechaEntrega || ''} onChange={(e) => setCurrentOrder({...currentOrder, fechaEntrega: e.target.value })} /></div>
-            <div className="space-y-2"><Label>Prioridad</Label><Input type="number" min="1" max="5" value={currentOrder?.prioridad || 3} onChange={(e) => setCurrentOrder({...currentOrder, prioridad: parseInt(e.target.value) })} /></div>
+            <div className="space-y-2"><Label htmlFor="customer-name">Nombre Cliente</Label><Input id="customer-name" value={currentOrder?.nombreCliente || ''} onChange={(e) => setCurrentOrder({...currentOrder, nombreCliente: e.target.value })} /></div>
+            <div className="space-y-2"><Label htmlFor="delivery-date">Fecha Entrega</Label><Input id="delivery-date" type="date" value={currentOrder?.fechaEntrega || ''} onChange={(e) => setCurrentOrder({...currentOrder, fechaEntrega: e.target.value })} /></div>
+            <div className="space-y-2"><Label htmlFor="priority">Prioridad</Label><Input id="priority" type="number" min="1" max="5" value={currentOrder?.prioridad || 3} onChange={(e) => setCurrentOrder({...currentOrder, prioridad: parseInt(e.target.value) })} /></div>
           </div>
           <div>
             <h3 className="mb-2 font-medium">Items de la Orden</h3>
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
               {currentOrder?.items?.map((item, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <Select value={item.referencia} onValueChange={(value) => handleItemChange(index, 'referencia', value)}>
-                    <SelectTrigger><SelectValue placeholder="Seleccionar Producto" /></SelectTrigger>
-                    <SelectContent>
-                      {productReferences.map(ref => <SelectItem key={ref} value={ref}>{ref}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Input type="number" min="1" placeholder="Cant" className="w-24" value={item.cantidad} onChange={(e) => handleItemChange(index, 'cantidad', parseInt(e.target.value))} />
-                  <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(index)}><X className="h-4 w-4" /></Button>
+                <div key={index} className="flex items-center gap-2 p-2 border rounded-md">
+                  <div className="flex-1 space-y-1">
+                    <Label htmlFor={`item-ref-${index}`}>Referencia</Label>
+                     <Select value={item.referencia} onValueChange={(value) => handleItemChange(index, 'referencia', value)}>
+                        <SelectTrigger id={`item-ref-${index}`}><SelectValue placeholder="Seleccionar Producto" /></SelectTrigger>
+                        <SelectContent>
+                          {productReferences.length > 0 ? (
+                            productReferences.map(ref => <SelectItem key={ref} value={ref}>{ref}</SelectItem>)
+                          ) : (
+                            <SelectItem value="-" disabled>No hay productos en el BOM</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                  </div>
+                   <div className="space-y-1">
+                    <Label htmlFor={`item-qty-${index}`}>Cantidad</Label>
+                    <Input id={`item-qty-${index}`} type="number" min="1" placeholder="Cant" className="w-24" value={item.cantidad} onChange={(e) => handleItemChange(index, 'cantidad', parseInt(e.target.value) || 1)} />
+                   </div>
+                  <Button variant="ghost" size="icon" className="self-end" onClick={() => handleRemoveItem(index)}><X className="h-4 w-4" /></Button>
                 </div>
               ))}
             </div>
@@ -205,11 +250,11 @@ export default function OrdersPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-            <AlertDialogDescription>Esto eliminará permanentemente la orden <span className="font-bold">{orderToDelete?.id}</span>.</AlertDialogDescription>
+            <AlertDialogDescription>Esto eliminará permanentemente la orden <span className="font-bold">{orderToDelete?.id}</span> y todos sus items. Esta acción no se puede deshacer.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteOrder} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Borrar</AlertDialogAction>
+            <AlertDialogAction onClick={handleDeleteOrder} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Borrar Orden</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
