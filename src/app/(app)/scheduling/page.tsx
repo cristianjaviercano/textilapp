@@ -3,23 +3,40 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter
+} from "@/components/ui/dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { mockProducts } from '@/data/mock-data';
-import type { Task, ProductionOrder } from '@/lib/types';
-import { ArrowRight } from 'lucide-react';
+import type { Task, ProductionOrder, Product } from '@/lib/types';
+import { ArrowRight, Calculator } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
 
 const ORDERS_LOCAL_STORAGE_KEY = 'productionOrders';
+
+interface ProductStats {
+  descripcion: string;
+  totalSam: number;
+  loteSize: number;
+  unitsPerHour: number;
+  unitsPerDay: number;
+}
 
 export default function SchedulingPage() {
   const router = useRouter();
   const [numOperatives, setNumOperatives] = useState(8);
   const [workTime, setWorkTime] = useState(480);
   const [levelingUnit, setLevelingUnit] = useState(60);
-  const [unitsPerHour, setUnitsPerHour] = useState(60);
+  const [packageSize, setPackageSize] = useState(10);
   const [selectedOrders, setSelectedOrders] = useState<Record<string, boolean>>({});
   const [availableOrders, setAvailableOrders] = useState<ProductionOrder[]>([]);
 
@@ -63,6 +80,41 @@ export default function SchedulingPage() {
     });
     return Object.entries(totals).map(([operation, totalSam]) => ({ operation, totalSam }));
   }, [tasksToSchedule]);
+  
+  const initialStats: ProductStats[] = useMemo(() => {
+    const stats: Record<string, { totalSam: number; loteSize: number, products: Product[] }> = {};
+    const selectedOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
+
+    availableOrders
+      .filter(order => selectedOrderIds.includes(order.id))
+      .forEach(order => {
+        order.items.forEach(item => {
+          const productOps = mockProducts.filter(p => p.referencia === item.referencia);
+          if (productOps.length > 0) {
+            const productDesc = productOps[0].descripcion;
+            if (!stats[productDesc]) {
+              const totalSam = productOps.reduce((acc, op) => acc + op.sam, 0);
+              stats[productDesc] = { totalSam, loteSize: 0, products: productOps };
+            }
+            stats[productDesc].loteSize += item.cantidad;
+          }
+        });
+      });
+
+    const workHours = workTime / 60;
+
+    return Object.entries(stats).map(([descripcion, data]) => {
+      const unitsPerHour = (numOperatives * levelingUnit) / data.totalSam;
+      return {
+        descripcion,
+        totalSam: data.totalSam,
+        loteSize: data.loteSize,
+        unitsPerHour: unitsPerHour,
+        unitsPerDay: unitsPerHour * workHours
+      };
+    });
+  }, [selectedOrders, availableOrders, numOperatives, levelingUnit, workTime]);
+
 
   const handleSelectOrder = (orderId: string, checked: boolean | 'indeterminate') => {
     setSelectedOrders(prev => ({ ...prev, [orderId]: !!checked }));
@@ -76,7 +128,7 @@ export default function SchedulingPage() {
       })),
       tasks: tasksToSchedule,
       levelingUnit: levelingUnit,
-      unitsPerHour: unitsPerHour,
+      packageSize: packageSize,
     };
     
     localStorage.setItem('schedulingData', JSON.stringify(schedulingData));
@@ -107,23 +159,47 @@ export default function SchedulingPage() {
            <CardContent className="grid gap-2">
             <Label htmlFor="leveling-unit">Unidad de Nivelación (min)</Label>
             <Input id="leveling-unit" type="number" value={levelingUnit} onChange={e => setLevelingUnit(parseInt(e.target.value))} />
-             <Label htmlFor="units-per-hour">Unidades por Hora</Label>
-            <Input id="units-per-hour" type="number" value={unitsPerHour} onChange={e => setUnitsPerHour(parseInt(e.target.value))} />
+             <Label htmlFor="package-size">Tamaño de Paquete</Label>
+            <Input id="package-size" type="number" value={packageSize} onChange={e => setPackageSize(parseInt(e.target.value))} />
           </CardContent>
         </Card>
-         <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-base">Tiempo por Paquete</CardTitle></CardHeader>
-            <CardContent>
-                {/* This can be enhanced later */}
-                <p className="text-sm text-muted-foreground">Configuración futura para paquetes de trabajo.</p>
-            </CardContent>
-        </Card>
-        <Card className="flex flex-col justify-center bg-primary text-primary-foreground">
-          <CardContent className="pt-6">
-            <Button className="w-full bg-primary-foreground text-primary hover:bg-primary-foreground/90" disabled={!isAnyOrderSelected} onClick={handleLevelJobs}>
-              Nivelar Trabajos <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-            {!isAnyOrderSelected && <p className="text-xs text-center mt-2 text-primary-foreground/70">Seleccione al menos una orden</p>}
+        <Card className="lg:col-span-2 flex flex-col justify-center">
+            <CardContent className="pt-6 grid grid-cols-2 gap-4">
+               <Dialog>
+                <DialogTrigger asChild>
+                    <Button variant="outline" className="w-full" disabled={!isAnyOrderSelected}>
+                        <Calculator className="mr-2" />
+                        Estadísticas Iniciales
+                    </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-xl">
+                    <DialogHeader>
+                    <DialogTitle>Estadísticas Iniciales</DialogTitle>
+                    <CardDescription>Cálculos basados en las órdenes de producción seleccionadas.</CardDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        {initialStats.map(stat => (
+                            <div key={stat.descripcion}>
+                                <h3 className="font-bold text-lg">{stat.descripcion}</h3>
+                                <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
+                                    <p><strong>Tamaño de Lote:</strong></p><p>{stat.loteSize.toFixed(0)}</p>
+                                    <p><strong>SAM Total Producto:</strong></p><p>{stat.totalSam.toFixed(2)} min</p>
+                                    <p><strong>Unidades por Hora (est.):</strong></p><p>{stat.unitsPerHour.toFixed(2)}</p>
+                                    <p><strong>Unidades por Día (est.):</strong></p><p>{stat.unitsPerDay.toFixed(2)}</p>
+                                </div>
+                                <Separator className="my-4"/>
+                            </div>
+                        ))}
+                    </div>
+                     <DialogFooter>
+                        <p className="text-xs text-muted-foreground">Estas son estimaciones iniciales. La producción real puede variar.</p>
+                    </DialogFooter>
+                </DialogContent>
+                </Dialog>
+                <Button className="w-full bg-primary text-primary-foreground hover:bg-primary-foreground/90" disabled={!isAnyOrderSelected} onClick={handleLevelJobs}>
+                    Nivelar Trabajos <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+                {!isAnyOrderSelected && <p className="text-xs text-center mt-2 text-muted-foreground col-span-2">Seleccione al menos una orden para ver estadísticas o nivelar.</p>}
           </CardContent>
         </Card>
       </div>
