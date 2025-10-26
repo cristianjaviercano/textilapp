@@ -1,5 +1,3 @@
-
-
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -14,8 +12,9 @@ import { mockProducts } from '@/data/mock-data';
 import type { Task, ProductionOrder, Product, ProductStats } from '@/lib/types';
 import { ArrowRight, Calculator } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import initialOrders from "@/data/orders.json";
 
-const ORDERS_LOCAL_STORAGE_KEY = 'productionOrders';
+
 const SCHEDULING_STATS_KEY = 'schedulingInitialStats';
 const SCHEDULING_PARAMS_KEY = 'schedulingParams';
 
@@ -26,14 +25,12 @@ export default function SchedulingPage() {
   const [levelingUnit, setLevelingUnit] = useState(60);
   const [packageSize, setPackageSize] = useState(10);
   const [selectedOrders, setSelectedOrders] = useState<Record<string, boolean>>({});
-  const [availableOrders, setAvailableOrders] = useState<ProductionOrder[]>([]);
+  const [availableOrders, setAvailableOrders] = useState<ProductionOrder[]>(initialOrders);
   const [initialStats, setInitialStats] = useState<ProductStats[]>([]);
 
   useEffect(() => {
-    const storedOrders = localStorage.getItem(ORDERS_LOCAL_STORAGE_KEY);
-    if (storedOrders) {
-      setAvailableOrders(JSON.parse(storedOrders));
-    }
+    // No longer need to load from localStorage, as we import from JSON
+    
     const storedStats = localStorage.getItem(SCHEDULING_STATS_KEY);
     if (storedStats) {
       setInitialStats(JSON.parse(storedStats));
@@ -143,18 +140,20 @@ export default function SchedulingPage() {
     setSelectedOrders(prev => ({ ...prev, [orderId]: !!checked }));
   };
 
-  const handleLevelJobs = () => {
+  const handleLevelJobs = async () => {
     const selectedOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
     
-    // Save stats to selected orders
-    const updatedOrders = availableOrders.map(order => {
+    const ordersToUpdate = availableOrders.map(order => {
       if (selectedOrderIds.includes(order.id)) {
         return { ...order, stats: initialStats };
       }
       return order;
     });
-    localStorage.setItem(ORDERS_LOCAL_STORAGE_KEY, JSON.stringify(updatedOrders));
 
+    // We can't call the server action and then save to localStorage,
+    // as the state won't be in sync. The server action should be the source of truth.
+    // For now, we will update the local state and scheduling data.
+    // The save action will be responsible for persistence.
 
     const schedulingData = {
       operatives: Array.from({ length: numOperatives }, (_, i) => ({

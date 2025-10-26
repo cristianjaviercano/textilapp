@@ -29,7 +29,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { mockOrders, mockProducts } from "@/data/mock-data";
+import { mockProducts } from "@/data/mock-data";
 import type { ProductionOrder, OrderItem } from "@/lib/types";
 import { PlusCircle, MoreHorizontal, Pencil, Trash2, X, Save, Loader2 } from "lucide-react";
 import {
@@ -42,8 +42,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { saveOrdersData } from "./actions";
-
-const LOCAL_STORAGE_KEY = 'productionOrders';
+import initialOrders from "@/data/orders.json";
 
 const initialOrderState: Omit<ProductionOrder, "id"> = {
   nombreCliente: "",
@@ -53,30 +52,13 @@ const initialOrderState: Omit<ProductionOrder, "id"> = {
 };
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<ProductionOrder[]>([]);
+  const [orders, setOrders] = useState<ProductionOrder[]>(initialOrders);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<Partial<ProductionOrder> | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<ProductionOrder | null>(null);
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
-
-  useEffect(() => {
-    const storedOrders = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (storedOrders) {
-      setOrders(JSON.parse(storedOrders));
-    } else {
-      setOrders(mockOrders);
-    }
-  }, []);
-  
-  useEffect(() => {
-    // Save to localStorage whenever orders change, except for the initial load
-    if (orders.length > 0 || (localStorage.getItem(LOCAL_STORAGE_KEY) && orders.length === 0)) {
-       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(orders));
-    }
-  }, [orders]);
-
 
   const productReferences = useMemo(() => {
     const refs = mockProducts.map(p => p.referencia);
