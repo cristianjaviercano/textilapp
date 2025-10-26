@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { mockProducts } from '@/data/mock-data';
 import type { Task, ProductionOrder, Product } from '@/lib/types';
 import { ArrowRight, Calculator } from 'lucide-react';
@@ -136,7 +137,7 @@ export default function SchedulingPage() {
         <p className="text-muted-foreground">Configure operarios, seleccione órdenes y prepárese para la asignación de tareas.</p>
       </div>
 
-      <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-6">
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base">Configuración</CardTitle></CardHeader>
           <CardContent className="grid gap-2">
@@ -151,36 +152,45 @@ export default function SchedulingPage() {
            <CardContent className="grid gap-2">
             <Label htmlFor="leveling-unit">Unidad de Nivelación (min)</Label>
             <Input id="leveling-unit" type="number" value={levelingUnit} onChange={e => setLevelingUnit(parseInt(e.target.value))} />
-             <Label htmlFor="package-size">Tamaño de Paquete</Label>
+            <Label htmlFor="package-size">Tamaño de Paquete</Label>
             <Input id="package-size" type="number" value={packageSize} onChange={e => setPackageSize(parseInt(e.target.value))} />
           </CardContent>
         </Card>
-        <Card className="md:col-span-2 flex flex-col">
-            <CardHeader className="pb-2">
-                <CardTitle className="text-base">Estadísticas Iniciales</CardTitle>
-                <CardDescription>Cálculos basados en las órdenes seleccionadas.</CardDescription>
-            </CardHeader>
-            <CardContent className="flex-1 space-y-4 overflow-y-auto">
-                {isAnyOrderSelected && initialStats.length > 0 ? (
-                    initialStats.map((stat, index) => (
-                        <div key={stat.descripcion}>
-                            <h3 className="font-bold">{stat.descripcion}</h3>
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1 text-sm">
-                                <p>Tamaño de Lote:</p><p className="text-right font-medium">{stat.loteSize.toFixed(0)}</p>
-                                <p>SAM Total Producto:</p><p className="text-right font-medium">{stat.totalSam.toFixed(2)} min</p>
-                                <p>Unidades/Hora (est.):</p><p className="text-right font-medium">{stat.unitsPerHour.toFixed(2)}</p>
-                                <p>Unidades/Día (est.):</p><p className="text-right font-medium">{stat.unitsPerDay.toFixed(2)}</p>
-                            </div>
-                            {index < initialStats.length - 1 && <Separator className="my-2"/>}
-                        </div>
-                    ))
-                ) : (
-                   <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-                        <p>Seleccione una orden para ver las estadísticas.</p>
-                   </div>
-                )}
-            </CardContent>
-        </Card>
+        <div className="md:col-span-2 flex flex-col gap-4">
+             <Dialog>
+                <DialogTrigger asChild>
+                    <Button variant="outline" disabled={!isAnyOrderSelected}>
+                        <Calculator className="mr-2 h-4 w-4" />
+                        Estadísticas Iniciales
+                    </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Estadísticas Iniciales</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        {isAnyOrderSelected && initialStats.length > 0 ? (
+                            initialStats.map((stat, index) => (
+                                <div key={stat.descripcion}>
+                                    <h3 className="font-bold">{stat.descripcion}</h3>
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1 text-sm">
+                                        <p>Tamaño de Lote:</p><p className="text-right font-medium">{stat.loteSize.toFixed(0)}</p>
+                                        <p>SAM Total Producto:</p><p className="text-right font-medium">{stat.totalSam.toFixed(2)} min</p>
+                                        <p>Unidades/Hora (est.):</p><p className="text-right font-medium">{stat.unitsPerHour.toFixed(2)}</p>
+                                        <p>Unidades/Día (est.):</p><p className="text-right font-medium">{stat.unitsPerDay.toFixed(2)}</p>
+                                    </div>
+                                     {index < initialStats.length - 1 && <Separator className="my-2"/>}
+                                </div>
+                            ))
+                        ) : (
+                           <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                                <p>Seleccione una orden para ver las estadísticas.</p>
+                           </div>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-5 gap-6">
