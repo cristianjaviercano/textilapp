@@ -19,6 +19,7 @@ interface SchedulingData {
   operatives: Operative[];
   tasks: Task[];
   levelingUnit: number;
+  unitsPerHour: number;
 }
 
 export default function AssignmentPage() {
@@ -38,9 +39,9 @@ export default function AssignmentPage() {
         if (parsedData.operatives && parsedData.tasks && Array.isArray(parsedData.tasks)) {
            // Ensure all tasks have a unitSam, defaulting to 0 if not present
            parsedData.tasks.forEach(task => {
-            if (typeof task.unitSam !== 'number') {
-              task.unitSam = 0;
-            }
+            if (typeof task.unitSam !== 'number') task.unitSam = 0;
+            if (typeof task.consecutivo !== 'number') task.consecutivo = 0;
+            if (typeof task.maquina !== 'string') task.maquina = 'N/A';
           });
           setData(parsedData);
         } else {
@@ -184,14 +185,19 @@ export default function AssignmentPage() {
              <Card>
                 <CardHeader>
                     <CardTitle>Prenda: {productName}</CardTitle>
+                    <CardDescription>Unidades por Hora: {data.unitsPerHour}</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="sticky left-0 bg-card z-10 w-[300px]">Tarea</TableHead>
-                          <TableHead className="text-right w-[120px]">SAM Unitario</TableHead>
+                          <TableHead className="sticky left-0 bg-card z-10 w-[60px]">Cons.</TableHead>
+                          <TableHead className="sticky left-16 bg-card z-10 w-[250px]">Tarea</TableHead>
+                          <TableHead className="w-[150px]">Máquina</TableHead>
+                          <TableHead className="text-right w-[100px]">SAM Unit.</TableHead>
+                          <TableHead className="text-right w-[100px]">T. Paquete</TableHead>
+                          <TableHead className="text-right w-[120px]">Min. Nec. x Hora</TableHead>
                           <TableHead className="text-right w-[120px]">SAM Total Req.</TableHead>
                           <TableHead className="text-right w-[120px]">SAM Asignado</TableHead>
                           {data.operatives.map(op => (
@@ -200,18 +206,23 @@ export default function AssignmentPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {tasksByProduct[productName].map(task => {
+                        {tasksByProduct[productName].sort((a, b) => a.consecutivo - b.consecutivo).map(task => {
                           const taskTotal = totals.taskTotals[task.id];
                           const assigned = taskTotal?.assigned || 0;
                           const required = taskTotal?.required || 0;
                           const isBalanced = Math.abs(assigned - required) < 0.01;
+                          const minutesNeeded = task.unitSam * data.unitsPerHour;
                           return (
                             <TableRow key={task.id}>
-                              <TableCell className="sticky left-0 bg-card z-10 font-medium w-[300px]">
-                                <div className="font-bold">{task.operation}</div>
-                                <div className="text-xs text-muted-foreground">{task.orderId} / {task.productDescription}</div>
+                              <TableCell className="sticky left-0 bg-card z-10 font-medium text-center w-[60px]">{task.consecutivo}</TableCell>
+                              <TableCell className="sticky left-16 bg-card z-10 font-medium w-[250px]">
+                                <div>{task.operation}</div>
+                                <div className="text-xs text-muted-foreground">{task.orderId}</div>
                               </TableCell>
-                              <TableCell className="text-right w-[120px]">{task.unitSam.toFixed(2)}</TableCell>
+                              <TableCell className="w-[150px]">{task.maquina}</TableCell>
+                              <TableCell className="text-right w-[100px]">{task.unitSam.toFixed(2)}</TableCell>
+                              <TableCell className="text-right w-[100px]">N/A</TableCell>
+                              <TableCell className="text-right w-[120px]">{minutesNeeded.toFixed(2)}</TableCell>
                               <TableCell className="text-right w-[120px]">{required.toFixed(2)}</TableCell>
                               <TableCell className={`text-right font-bold w-[120px] ${isBalanced ? 'text-green-600' : 'text-red-600'}`}>{assigned.toFixed(2)}</TableCell>
                               {data.operatives.map(op => (
@@ -231,7 +242,7 @@ export default function AssignmentPage() {
                       </TableBody>
                       <tfoot>
                         <TableRow className="bg-secondary hover:bg-secondary">
-                          <th colSpan={4} className="p-2 text-right font-bold sticky left-0 bg-secondary z-10">Total Asignado (Minutos)</th>
+                          <th colSpan={8} className="p-2 text-right font-bold sticky left-0 bg-secondary z-10">Total Asignado (Minutos)</th>
                           {data.operatives.map(op => {
                              const totalMinutes = totals.operativeTotals[op.id] || 0;
                              const availableMinutes = op.availableTime;

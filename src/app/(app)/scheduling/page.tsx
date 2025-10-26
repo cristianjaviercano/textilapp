@@ -19,6 +19,7 @@ export default function SchedulingPage() {
   const [numOperatives, setNumOperatives] = useState(8);
   const [workTime, setWorkTime] = useState(480);
   const [levelingUnit, setLevelingUnit] = useState(60);
+  const [unitsPerHour, setUnitsPerHour] = useState(60);
   const [selectedOrders, setSelectedOrders] = useState<Record<string, boolean>>({});
   const [availableOrders, setAvailableOrders] = useState<ProductionOrder[]>([]);
 
@@ -45,7 +46,9 @@ export default function SchedulingPage() {
               productDescription: op.descripcion,
               operation: op.operacion,
               totalSam: op.sam * item.cantidad,
-              unitSam: op.sam, // This was the missing piece
+              unitSam: op.sam,
+              consecutivo: op.consecutivo,
+              maquina: op.maquina,
             });
           });
         });
@@ -73,6 +76,7 @@ export default function SchedulingPage() {
       })),
       tasks: tasksToSchedule,
       levelingUnit: levelingUnit,
+      unitsPerHour: unitsPerHour,
     };
     
     localStorage.setItem('schedulingData', JSON.stringify(schedulingData));
@@ -90,25 +94,29 @@ export default function SchedulingPage() {
 
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Operarios</CardTitle></CardHeader>
-          <CardContent>
-            <Label htmlFor="num-operatives">Número de Operarios</Label>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Configuración</CardTitle></CardHeader>
+          <CardContent className="grid gap-2">
+            <Label htmlFor="num-operatives"># Operarios</Label>
             <Input id="num-operatives" type="number" value={numOperatives} onChange={e => setNumOperatives(parseInt(e.target.value))} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Tiempo de Trabajo</CardTitle></CardHeader>
-          <CardContent>
             <Label htmlFor="work-time">Tiempo por Operario (min)</Label>
             <Input id="work-time" type="number" value={workTime} onChange={e => setWorkTime(parseInt(e.target.value))} />
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Nivelación</CardTitle></CardHeader>
-          <CardContent>
+           <CardHeader className="pb-2"><CardTitle className="text-base">Nivelación</CardTitle></CardHeader>
+           <CardContent className="grid gap-2">
             <Label htmlFor="leveling-unit">Unidad de Nivelación (min)</Label>
             <Input id="leveling-unit" type="number" value={levelingUnit} onChange={e => setLevelingUnit(parseInt(e.target.value))} />
+             <Label htmlFor="units-per-hour">Unidades por Hora</Label>
+            <Input id="units-per-hour" type="number" value={unitsPerHour} onChange={e => setUnitsPerHour(parseInt(e.target.value))} />
           </CardContent>
+        </Card>
+         <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Tiempo por Paquete</CardTitle></CardHeader>
+            <CardContent>
+                {/* This can be enhanced later */}
+                <p className="text-sm text-muted-foreground">Configuración futura para paquetes de trabajo.</p>
+            </CardContent>
         </Card>
         <Card className="flex flex-col justify-center bg-primary text-primary-foreground">
           <CardContent className="pt-6">

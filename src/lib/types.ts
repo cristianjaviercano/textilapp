@@ -30,6 +30,8 @@ export type Task = {
   operation: string;
   totalSam: number; // samRequeridoTotal
   unitSam: number;
+  consecutivo: number;
+  maquina: string;
 };
 
 export type Operative = {
