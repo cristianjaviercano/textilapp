@@ -6,12 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import type { Operative, Task, Assignment } from '@/lib/types';
+import type { Operative, Task } from '@/lib/types';
 import { runAutomatedAssignment } from '../actions';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, Wand2, Info, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 
 interface SchedulingData {
   operatives: Operative[];
@@ -25,16 +27,21 @@ export default function AssignmentPage() {
   const [data, setData] = useState<SchedulingData | null>(null);
   const [assignments, setAssignments] = useState<Record<string, Record<string, number>>>({});
   const [aiSummary, setAiSummary] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // Start as loading
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let storedData: string | null = null;
     try {
       storedData = localStorage.getItem('schedulingData');
       if (storedData) {
-        const parsedData = JSON.parse(storedData);
-        // Basic validation
-        if(parsedData.operatives && parsedData.tasks) {
+        const parsedData: SchedulingData = JSON.parse(storedData);
+        if (parsedData.operatives && parsedData.tasks && Array.isArray(parsedData.tasks)) {
+           // Ensure all tasks have a unitSam, defaulting to 0 if not present
+           parsedData.tasks.forEach(task => {
+            if (typeof task.unitSam !== 'number') {
+              task.unitSam = 0;
+            }
+          });
           setData(parsedData);
         } else {
           throw new Error("Invalid data structure");
@@ -55,9 +62,21 @@ export default function AssignmentPage() {
         });
         router.push('/scheduling');
     } finally {
-        setIsLoading(false); // Stop loading after data is processed or error handled
+        setIsLoading(false);
     }
   }, [router, toast]);
+
+  const tasksByProduct = useMemo(() => {
+    if (!data) return {};
+    return data.tasks.reduce((acc, task) => {
+        const key = task.productDescription;
+        if (!acc[key]) {
+            acc[key] = [];
+        }
+        acc[key].push(task);
+        return acc;
+    }, {} as Record<string, Task[]>);
+  }, [data]);
 
   const handleAssignmentChange = (taskId: string, operativeId: string, value: string) => {
     const sam = parseFloat(value) || 0;
@@ -122,6 +141,8 @@ export default function AssignmentPage() {
   if (isLoading || !data) {
     return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
+  
+  const productTabs = Object.keys(tasksByProduct);
 
   return (
     <div className="space-y-6">
@@ -150,72 +171,88 @@ export default function AssignmentPage() {
         </Alert>
       )}
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="sticky left-0 bg-card z-10 w-[300px]">Tarea</TableHead>
-                  <TableHead className="text-right w-[120px]">SAM Unitario</TableHead>
-                  <TableHead className="text-right w-[120px]">SAM Total</TableHead>
-                  <TableHead className="text-right w-[120px]">SAM Asignado</TableHead>
-                  {data.operatives.map(op => (
-                    <TableHead key={op.id} className="text-center w-[150px]">{op.id}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.tasks.map(task => {
-                  const taskTotal = totals.taskTotals[task.id];
-                  const assigned = taskTotal?.assigned || 0;
-                  const required = taskTotal?.required || 0;
-                  const isBalanced = Math.abs(assigned - required) < 0.01;
-                  return (
-                    <TableRow key={task.id}>
-                      <TableCell className="sticky left-0 bg-card z-10 font-medium w-[300px]">
-                        <div className="font-bold">{task.operation}</div>
-                        <div className="text-xs text-muted-foreground">{task.orderId} / {task.productDescription}</div>
-                      </TableCell>
-                      <TableCell className="text-right w-[120px]">{task.unitSam.toFixed(2)}</TableCell>
-                      <TableCell className="text-right w-[120px]">{required.toFixed(2)}</TableCell>
-                      <TableCell className={`text-right font-bold w-[120px] ${isBalanced ? 'text-green-600' : 'text-red-600'}`}>{assigned.toFixed(2)}</TableCell>
-                      {data.operatives.map(op => (
-                        <TableCell key={op.id} className="p-1 w-[150px]">
-                          <Input
-                            type="number"
-                            className="text-right"
-                            value={assignments[task.id]?.[op.id] || ''}
-                            onChange={e => handleAssignmentChange(task.id, op.id, e.target.value)}
-                            placeholder="0"
-                          />
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-              <tfoot>
-                <TableRow className="bg-secondary hover:bg-secondary">
-                  <th colSpan={4} className="p-2 text-right font-bold sticky left-0 bg-secondary z-10">Total Asignado por Operario</th>
-                  {data.operatives.map(op => {
-                     const total = totals.operativeTotals[op.id] || 0;
-                     const available = op.availableTime;
-                     const usage = available > 0 ? (total / available) * 100 : 0;
-                     const isOverloaded = total > available;
-                    return (
-                        <th key={op.id} className="p-2 text-center font-normal">
-                            <div className={`font-bold ${isOverloaded ? 'text-red-600' : ''}`}>{total.toFixed(2)} / {available}</div>
-                            <Progress value={usage} className={`h-2 mt-1 ${isOverloaded ? '[&>div]:bg-red-500': ''}`} />
-                        </th>
-                    )
-                  })}
-                </TableRow>
-              </tfoot>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue={productTabs[0]} className="w-full">
+        <TabsList>
+            {productTabs.map(productName => (
+                <TabsTrigger key={productName} value={productName}>{productName}</TabsTrigger>
+            ))}
+        </TabsList>
+        {productTabs.map(productName => (
+          <TabsContent key={productName} value={productName}>
+             <Card>
+                <CardHeader>
+                    <CardTitle>Prenda: {productName}</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="sticky left-0 bg-card z-10 w-[300px]">Tarea</TableHead>
+                          <TableHead className="text-right w-[120px]">SAM Unitario</TableHead>
+                          <TableHead className="text-right w-[120px]">SAM Total Req.</TableHead>
+                          <TableHead className="text-right w-[120px]">SAM Asignado</TableHead>
+                          {data.operatives.map(op => (
+                            <TableHead key={op.id} className="text-center w-[150px]">{op.id}</TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {tasksByProduct[productName].map(task => {
+                          const taskTotal = totals.taskTotals[task.id];
+                          const assigned = taskTotal?.assigned || 0;
+                          const required = taskTotal?.required || 0;
+                          const isBalanced = Math.abs(assigned - required) < 0.01;
+                          return (
+                            <TableRow key={task.id}>
+                              <TableCell className="sticky left-0 bg-card z-10 font-medium w-[300px]">
+                                <div className="font-bold">{task.operation}</div>
+                                <div className="text-xs text-muted-foreground">{task.orderId} / {task.productDescription}</div>
+                              </TableCell>
+                              <TableCell className="text-right w-[120px]">{task.unitSam.toFixed(2)}</TableCell>
+                              <TableCell className="text-right w-[120px]">{required.toFixed(2)}</TableCell>
+                              <TableCell className={`text-right font-bold w-[120px] ${isBalanced ? 'text-green-600' : 'text-red-600'}`}>{assigned.toFixed(2)}</TableCell>
+                              {data.operatives.map(op => (
+                                <TableCell key={op.id} className="p-1 w-[150px]">
+                                  <Input
+                                    type="number"
+                                    className="text-right"
+                                    value={assignments[task.id]?.[op.id] || ''}
+                                    onChange={e => handleAssignmentChange(task.id, op.id, e.target.value)}
+                                    placeholder="0"
+                                  />
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                      <tfoot>
+                        <TableRow className="bg-secondary hover:bg-secondary">
+                          <th colSpan={4} className="p-2 text-right font-bold sticky left-0 bg-secondary z-10">Total Asignado (Horas)</th>
+                          {data.operatives.map(op => {
+                             const totalMinutes = totals.operativeTotals[op.id] || 0;
+                             const levelingUnit = data.levelingUnit > 0 ? data.levelingUnit : 60;
+                             const totalHours = totalMinutes / levelingUnit;
+                             const availableHours = op.availableTime / levelingUnit;
+                             const usage = availableHours > 0 ? (totalHours / availableHours) * 100 : 0;
+                             const isOverloaded = totalHours > availableHours;
+                            return (
+                                <th key={op.id} className="p-2 text-center font-normal">
+                                    <div className={`font-bold ${isOverloaded ? 'text-red-600' : ''}`}>{totalHours.toFixed(2)} / {availableHours.toFixed(2)} hrs</div>
+                                    <Progress value={usage} className={`h-2 mt-1 ${isOverloaded ? '[&>div]:bg-red-500': ''}`} />
+                                </th>
+                            )
+                          })}
+                        </TableRow>
+                      </tfoot>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+          </TabsContent>
+        ))}
+      </Tabs>
     </div>
   );
 }
