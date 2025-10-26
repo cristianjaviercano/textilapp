@@ -209,7 +209,7 @@ export default function AssignmentPage() {
                                 <div className="font-bold">{task.operation}</div>
                                 <div className="text-xs text-muted-foreground">{task.orderId} / {task.productDescription}</div>
                               </TableCell>
-                              <TableCell className="text-right w-[120px]">{task.unitSam.toFixed(2)}</TableCell>
+                              <TableCell className="text-right w-[120px]">{(task.unitSam || 0).toFixed(2)}</TableCell>
                               <TableCell className="text-right w-[120px]">{required.toFixed(2)}</TableCell>
                               <TableCell className={`text-right font-bold w-[120px] ${isBalanced ? 'text-green-600' : 'text-red-600'}`}>{assigned.toFixed(2)}</TableCell>
                               {data.operatives.map(op => (
