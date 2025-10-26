@@ -281,7 +281,7 @@ export default function AssignmentPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {tasksByProduct[productName].sort((a, b) => a.consecutivo - b.consecutivo).map(task => {
+                        {tasksByProduct[productName].map((task, index) => {
                           const unitsPerHour = data.unitsPerHour?.[productName] || 0;
                           const requiredSam = task.unitSam * unitsPerHour;
                           const assigned = Object.values(assignments[task.id] || {}).reduce((sum, val) => sum + val, 0);
@@ -289,7 +289,7 @@ export default function AssignmentPage() {
                           const timePerPackage = task.unitSam * data.packageSize;
                           return (
                             <TableRow key={task.id}>
-                              <TableCell className="sticky left-0 bg-card z-10 font-medium text-center w-[60px]">{task.consecutivo}</TableCell>
+                              <TableCell className="sticky left-0 bg-card z-10 font-medium text-center w-[60px]">{index + 1}</TableCell>
                               <TableCell className="sticky left-16 bg-card z-10 font-medium w-[250px]">
                                 <div>{task.operation}</div>
                                 <div className="text-xs text-muted-foreground">{task.orderId}</div>
