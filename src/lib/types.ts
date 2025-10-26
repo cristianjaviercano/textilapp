@@ -28,7 +28,6 @@ export type Task = {
   orderId: string;
   productDescription: string; // prenda
   operation: string;
-  totalSam: number; // samRequeridoTotal
   unitSam: number;
   consecutivo: number;
   maquina: string;

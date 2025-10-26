@@ -9,7 +9,6 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { mockProducts } from '@/data/mock-data';
 import type { Task, ProductionOrder, Product } from '@/lib/types';
 import { ArrowRight, Calculator } from 'lucide-react';
@@ -17,6 +16,7 @@ import { Separator } from '@/components/ui/separator';
 
 const ORDERS_LOCAL_STORAGE_KEY = 'productionOrders';
 const SCHEDULING_STATS_KEY = 'schedulingInitialStats';
+const SCHEDULING_PARAMS_KEY = 'schedulingParams';
 
 
 interface ProductStats {
@@ -46,10 +46,19 @@ export default function SchedulingPage() {
     if (storedStats) {
       setInitialStats(JSON.parse(storedStats));
     }
+    const storedParams = localStorage.getItem(SCHEDULING_PARAMS_KEY);
+    if (storedParams) {
+      const { numOperatives, workTime, levelingUnit, packageSize, selectedOrders } = JSON.parse(storedParams);
+      setNumOperatives(numOperatives);
+      setWorkTime(workTime);
+      setLevelingUnit(levelingUnit);
+      setPackageSize(packageSize);
+      setSelectedOrders(selectedOrders);
+    }
   }, []);
 
-  const tasksToSchedule: Task[] = useMemo(() => {
-    const tasks: Task[] = [];
+  const tasksToSchedule: Omit<Task, 'totalSam'>[] = useMemo(() => {
+    const tasks: Omit<Task, 'totalSam'>[] = [];
     const selectedOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
 
     availableOrders
@@ -63,7 +72,6 @@ export default function SchedulingPage() {
               orderId: order.id,
               productDescription: op.descripcion,
               operation: op.operacion,
-              totalSam: op.sam * item.cantidad,
               unitSam: op.sam,
               consecutivo: op.consecutivo,
               maquina: op.maquina,
@@ -74,17 +82,30 @@ export default function SchedulingPage() {
     return tasks;
   }, [selectedOrders, availableOrders]);
   
-  const samTotals = useMemo(() => {
+  const samTotalsByOperation = useMemo(() => {
     const totals: Record<string, number> = {};
-    tasksToSchedule.forEach(task => {
-        totals[task.operation] = (totals[task.operation] || 0) + task.totalSam;
-    });
+     const selectedOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
+
+    availableOrders
+      .filter(order => selectedOrderIds.includes(order.id))
+      .forEach(order => {
+          order.items.forEach(item => {
+              const productOps = mockProducts.filter(p => p.referencia === item.referencia);
+              productOps.forEach(op => {
+                  totals[op.operacion] = (totals[op.operacion] || 0) + (op.sam * item.cantidad);
+              })
+          })
+      });
+
     return Object.entries(totals).map(([operation, totalSam]) => ({ operation, totalSam }));
-  }, [tasksToSchedule]);
+  }, [selectedOrders, availableOrders]);
   
   useEffect(() => {
     const stats: Record<string, { totalSam: number; loteSize: number, products: Product[] }> = {};
     const selectedOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
+
+    const paramsToStore = { numOperatives, workTime, levelingUnit, packageSize, selectedOrders };
+    localStorage.setItem(SCHEDULING_PARAMS_KEY, JSON.stringify(paramsToStore));
 
     if (selectedOrderIds.length === 0) {
       setInitialStats([]);
@@ -123,7 +144,7 @@ export default function SchedulingPage() {
 
     setInitialStats(calculatedStats);
     localStorage.setItem(SCHEDULING_STATS_KEY, JSON.stringify(calculatedStats));
-  }, [selectedOrders, availableOrders, numOperatives, levelingUnit, workTime]);
+  }, [selectedOrders, availableOrders, numOperatives, levelingUnit, workTime, packageSize]);
 
 
   const handleSelectOrder = (orderId: string, checked: boolean | 'indeterminate') => {
@@ -139,6 +160,10 @@ export default function SchedulingPage() {
       tasks: tasksToSchedule,
       levelingUnit: levelingUnit,
       packageSize: packageSize,
+      unitsPerHour: initialStats.reduce((acc, stat) => {
+        acc[stat.descripcion] = stat.unitsPerHour;
+        return acc;
+      }, {} as Record<string, number>),
     };
     
     localStorage.setItem('schedulingData', JSON.stringify(schedulingData));
@@ -159,18 +184,18 @@ export default function SchedulingPage() {
           <CardHeader className="pb-2"><CardTitle className="text-base">Configuración</CardTitle></CardHeader>
           <CardContent className="grid gap-2">
             <Label htmlFor="num-operatives"># Operarios</Label>
-            <Input id="num-operatives" type="number" value={numOperatives} onChange={e => setNumOperatives(parseInt(e.target.value))} />
+            <Input id="num-operatives" type="number" value={numOperatives} onChange={e => setNumOperatives(parseInt(e.target.value) || 0)} />
             <Label htmlFor="work-time">Tiempo por Operario (min)</Label>
-            <Input id="work-time" type="number" value={workTime} onChange={e => setWorkTime(parseInt(e.target.value))} />
+            <Input id="work-time" type="number" value={workTime} onChange={e => setWorkTime(parseInt(e.target.value) || 0)} />
           </CardContent>
         </Card>
         <Card>
            <CardHeader className="pb-2"><CardTitle className="text-base">Nivelación</CardTitle></CardHeader>
            <CardContent className="grid gap-2">
             <Label htmlFor="leveling-unit">Unidad de Nivelación (min)</Label>
-            <Input id="leveling-unit" type="number" value={levelingUnit} onChange={e => setLevelingUnit(parseInt(e.target.value))} />
+            <Input id="leveling-unit" type="number" value={levelingUnit} onChange={e => setLevelingUnit(parseInt(e.target.value) || 0)} />
             <Label htmlFor="package-size">Tamaño de Paquete</Label>
-            <Input id="package-size" type="number" value={packageSize} onChange={e => setPackageSize(parseInt(e.target.value))} />
+            <Input id="package-size" type="number" value={packageSize} onChange={e => setPackageSize(parseInt(e.target.value) || 0)} />
           </CardContent>
         </Card>
         <Card className="md:col-span-2">
@@ -220,7 +245,7 @@ export default function SchedulingPage() {
                 <TableBody>
                   {availableOrders.map(order => (
                     <TableRow key={order.id} data-state={selectedOrders[order.id] && 'selected'}>
-                      <TableCell><Checkbox checked={selectedOrders[order.id] || false} onCheckedChange={(checked) => handleSelectOrder(order.id, checked)} /></TableCell>
+                      <TableCell><Checkbox checked={selectedOrders[order.id] || false} onCheckedChange={(checked) => handleSelectOrder(order.id, !!checked)} /></TableCell>
                       <TableCell className="font-medium">{order.id}</TableCell>
                       <TableCell>{order.nombreCliente}</TableCell>
                       <TableCell>{order.fechaEntrega}</TableCell>
@@ -250,7 +275,7 @@ export default function SchedulingPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {samTotals.length > 0 ? samTotals.map(item => (
+                  {samTotalsByOperation.length > 0 ? samTotalsByOperation.map(item => (
                     <TableRow key={item.operation}>
                       <TableCell className="font-medium">{item.operation}</TableCell>
                       <TableCell className="text-right">{item.totalSam.toFixed(2)}</TableCell>

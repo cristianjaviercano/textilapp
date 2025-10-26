@@ -20,6 +20,7 @@ interface SchedulingData {
   tasks: Task[];
   levelingUnit: number;
   packageSize: number;
+  unitsPerHour: Record<string, number>;
 }
 
 export default function AssignmentPage() {
@@ -196,7 +197,7 @@ export default function AssignmentPage() {
              <Card>
                 <CardHeader>
                     <CardTitle>Prenda: {productName}</CardTitle>
-                    <CardDescription>Tamaño de paquete: {data.packageSize} | Tiempo de Nivelación: {data.levelingUnit} min</CardDescription>
+                    <CardDescription>Tamaño de paquete: {data.packageSize} | Tiempo de Nivelación: {data.levelingUnit} min | Unidades/Hora: {data.unitsPerHour[productName]?.toFixed(2) || 'N/A'}</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
@@ -217,9 +218,10 @@ export default function AssignmentPage() {
                       </TableHeader>
                       <TableBody>
                         {tasksByProduct[productName].sort((a, b) => a.consecutivo - b.consecutivo).map(task => {
+                          const unitsPerHour = data.unitsPerHour[productName] || 0;
+                          const requiredSam = task.unitSam * unitsPerHour;
                           const assigned = Object.values(assignments[task.id] || {}).reduce((sum, val) => sum + val, 0);
-                          const required = task.totalSam;
-                          const isBalanced = Math.abs(assigned - required) < 0.01 && required > 0;
+                          const isBalanced = Math.abs(assigned - requiredSam) < 0.01 && requiredSam > 0;
                           const timePerPackage = task.unitSam * data.packageSize;
                           return (
                             <TableRow key={task.id}>
@@ -231,7 +233,7 @@ export default function AssignmentPage() {
                               <TableCell className="w-[150px]">{task.maquina}</TableCell>
                               <TableCell className="text-right w-[100px]">{task.unitSam.toFixed(2)}</TableCell>
                               <TableCell className="text-right w-[100px]">{timePerPackage.toFixed(2)}</TableCell>
-                              <TableCell className="text-right w-[120px]">{required.toFixed(2)}</TableCell>
+                              <TableCell className="text-right w-[120px]">{requiredSam.toFixed(2)}</TableCell>
                               <TableCell className={`text-right font-bold w-[120px] ${isBalanced ? 'text-green-600' : 'text-red-600'}`}>{assigned.toFixed(2)}</TableCell>
                               {data.operatives.map(op => (
                                 <TableCell key={op.id} className="p-1 w-[150px]">
@@ -248,10 +250,9 @@ export default function AssignmentPage() {
                           );
                         })}
                       </TableBody>
-                      <TableFooter>
+                       <TableFooter>
                         <TableRow className="bg-secondary/70 hover:bg-secondary/70 font-bold">
-                            <TableCell colSpan={2} className="sticky left-0 bg-secondary/70 z-10">Totales</TableCell>
-                            <TableCell className="text-center">{summaryTotals.totalTasks}</TableCell>
+                            <TableCell colSpan={3} className="sticky left-0 bg-secondary/70 z-10">Totales</TableCell>
                             <TableCell className="text-right">{summaryTotals.totalUnitSam.toFixed(2)}</TableCell>
                             <TableCell className="text-right">{summaryTotals.totalPackageTime.toFixed(2)}</TableCell>
                             <TableCell colSpan={2}></TableCell>
