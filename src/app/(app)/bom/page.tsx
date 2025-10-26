@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useTransition } from "react";
 import {
   Table,
   TableBody,
@@ -23,9 +23,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { mockProducts } from "@/data/mock-data";
 import type { Product } from "@/lib/types";
-import { PlusCircle, FileUp, Save, Trash2, XCircle } from "lucide-react";
+import { PlusCircle, FileUp, Save, Trash2, XCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
+import { saveBomData } from "./actions";
 
 const initialProductState: Omit<Product, "id"> = {
   referencia: "",
@@ -47,6 +48,7 @@ export default function BomPage() {
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const [isPending, startTransition] = useTransition();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -72,7 +74,6 @@ export default function BomPage() {
       };
       reader.readAsText(file, 'UTF-8');
     }
-    // Reset file input to allow selecting the same file again
     if(fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -83,7 +84,6 @@ export default function BomPage() {
     const headers = lines[0].split(';').map(h => h.trim());
     const expectedHeaders = ['REFERENCIA','DESCRIPCION','FAMILIA','PROCESO','CONSECUTIVO','OPERACIÓN','MAQUINA','SAM-MINUTOS'];
     
-    // Basic header validation
     if(headers.length !== expectedHeaders.length || !expectedHeaders.every((h, i) => h === headers[i])) {
         throw new Error("Las cabeceras del CSV no coinciden con el formato esperado.");
     }
@@ -116,7 +116,7 @@ export default function BomPage() {
   const handleToggleEdit = (id: string) => {
     if (editingRows[id]) {
       // If saving
-      handleSaveChanges(id);
+      handleSaveRowChanges(id);
     } else {
       // If starting to edit
       setEditingRows(prev => ({ ...prev, [id]: true }));
@@ -147,7 +147,7 @@ export default function BomPage() {
     }));
   };
 
-  const handleSaveChanges = (id: string) => {
+  const handleSaveRowChanges = (id: string) => {
     const changes = editedData[id];
     if (!changes) return;
 
@@ -163,7 +163,25 @@ export default function BomPage() {
       delete newEditedData[id];
       return newEditedData;
     });
-    toast({ title: "Guardado", description: "Los cambios en la operación han sido guardados." });
+    toast({ title: "Guardado", description: "Los cambios en la fila se han guardado localmente. Haga clic en Guardar BOM para persistir." });
+  };
+  
+  const handleSaveAllBom = () => {
+    startTransition(async () => {
+        const result = await saveBomData(products);
+        if (result.success) {
+            toast({
+                title: "BOM Guardado",
+                description: "La base de datos del BOM ha sido actualizada.",
+            });
+        } else {
+            toast({
+                variant: "destructive",
+                title: "Error al guardar",
+                description: result.error,
+            });
+        }
+    });
   };
 
   const handleOpenAlert = (id: string) => {
@@ -229,6 +247,10 @@ export default function BomPage() {
                 <PlusCircle className="mr-2" />
                 Añadir Operación
             </Button>
+            <Button onClick={handleSaveAllBom} disabled={isPending}>
+                {isPending ? <Loader2 className="mr-2 animate-spin" /> : <Save className="mr-2" />}
+                Guardar BOM
+            </Button>
         </div>
       </div>
       
@@ -244,7 +266,7 @@ export default function BomPage() {
               <TableHead>Operación</TableHead>
               <TableHead>Máquina</TableHead>
               <TableHead className="text-right">SAM (min)</TableHead>
-              <TableHead className="w-28 text-center">Acciones</TableHead>
+              <TableHead className="w-36 text-center">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -275,7 +297,7 @@ export default function BomPage() {
                         <div className="flex gap-1 justify-center">
                             {isEditing ? (
                                 <>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:text-green-700" onClick={() => handleSaveChanges(product.id)}>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:text-green-700" onClick={() => handleSaveRowChanges(product.id)}>
                                         <Save className="h-4 w-4"/>
                                     </Button>
                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => handleCancelEdit(product.id)}>
@@ -284,10 +306,9 @@ export default function BomPage() {
                                 </>
                             ) : (
                                 <>
-                                    <Checkbox className="mr-2" checked={editingRows[product.id]} onCheckedChange={() => handleToggleEdit(product.id)} id={`edit-${product.id}`} />
-                                     <label htmlFor={`edit-${product.id}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 sr-only">
-                                        Editar Fila
-                                    </label>
+                                    <Button variant="outline" size="sm" className="h-8" onClick={() => handleToggleEdit(product.id)}>
+                                        Editar
+                                    </Button>
                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600" onClick={() => handleOpenAlert(product.id)}>
                                         <Trash2 className="h-4 w-4"/>
                                     </Button>
