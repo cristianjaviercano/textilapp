@@ -6,9 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
-import type { Operative, Task } from '@/lib/types';
+import type { Operative, Task, ProductionOrder, AssignmentData } from '@/lib/types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, Wand2, Info, ArrowLeft } from 'lucide-react';
+import { Loader2, Wand2, Info, ArrowLeft, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,11 +22,13 @@ interface SchedulingData {
   unitsPerHour: Record<string, number>;
 }
 
+const ORDERS_LOCAL_STORAGE_KEY = 'productionOrders';
+
 export default function AssignmentPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [data, setData] = useState<SchedulingData | null>(null);
-  const [assignments, setAssignments] = useState<Record<string, Record<string, number>>>({});
+  const [assignments, setAssignments] = useState<AssignmentData>({});
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -169,14 +171,15 @@ export default function AssignmentPage() {
     for (const task of data.tasks) {
         const unitsPerHour = data.unitsPerHour?.[task.productDescription] || 0;
         let samToDistribute = task.unitSam * unitsPerHour;
-        if(samToDistribute === 0) continue;
+        
+        if (samToDistribute === 0) continue;
 
         if (!newAssignments[task.id]) {
             newAssignments[task.id] = {};
         }
 
         for (const operative of data.operatives) {
-            if (samToDistribute <= 0) break;
+            if (samToDistribute <= 0.01) break;
 
             const remainingOperativeCapacity = data.levelingUnit - (operativeLoads[operative.id] || 0);
             if (remainingOperativeCapacity <= 0) continue;
@@ -190,9 +193,49 @@ export default function AssignmentPage() {
     }
 
     setAssignments(newAssignments);
-    setAiSummary("Asignación automática completada distribuyendo el SAM Total Requerido.");
+    setAiSummary("Asignación automática completada con el algoritmo de nivelación secuencial.");
     setIsLoading(false);
     toast({ title: "Éxito", description: "Las tareas han sido asignadas automáticamente." });
+  };
+  
+  const handleSaveAssignments = () => {
+    try {
+        const storedOrders = localStorage.getItem(ORDERS_LOCAL_STORAGE_KEY);
+        if (!storedOrders) throw new Error("No se encontraron órdenes para guardar.");
+        
+        const allOrders: ProductionOrder[] = JSON.parse(storedOrders);
+
+        const assignmentsByOrder: Record<string, AssignmentData> = {};
+
+        for (const taskId in assignments) {
+            const orderId = taskId.split('-')[0];
+            if (!assignmentsByOrder[orderId]) {
+                assignmentsByOrder[orderId] = {};
+            }
+            assignmentsByOrder[orderId][taskId] = assignments[taskId];
+        }
+
+        const updatedOrders = allOrders.map(order => {
+            if (assignmentsByOrder[order.id]) {
+                return { ...order, assignments: assignmentsByOrder[order.id] };
+            }
+            return order;
+        });
+
+        localStorage.setItem(ORDERS_LOCAL_STORAGE_KEY, JSON.stringify(updatedOrders));
+
+        toast({
+            title: "Asignación Guardada",
+            description: "Las asignaciones se han guardado en las órdenes de producción correspondientes.",
+        });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Error desconocido";
+        toast({
+            variant: "destructive",
+            title: "Error al Guardar",
+            description: message,
+        });
+    }
   };
 
 
@@ -217,6 +260,10 @@ export default function AssignmentPage() {
             <Button onClick={handleAutoAssign} disabled={isLoading}>
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
                 Asignar Automáticamente
+            </Button>
+            <Button onClick={handleSaveAssignments}>
+                <Save className="mr-2 h-4 w-4" />
+                Guardar Asignación
             </Button>
         </div>
       </div>
@@ -262,7 +309,7 @@ export default function AssignmentPage() {
                       <TableBody>
                         {tasksByProduct[productName]
                          .map((task, index) => {
-                          const unitsPerHour = data.unitsPerHour?.[productName] || 0;
+                          const unitsPerHour = data.unitsPerHour?.[task.productDescription] || 0;
                           const requiredSam = task.unitSam * unitsPerHour;
                           const assigned = Object.values(assignments[task.id] || {}).reduce((sum, val) => sum + val, 0);
                           const isBalanced = Math.abs(assigned - requiredSam) < 0.01 || requiredSam === 0;

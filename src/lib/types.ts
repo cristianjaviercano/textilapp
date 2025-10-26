@@ -23,6 +23,8 @@ export type ProductStats = {
   unitsPerDay: number;
 };
 
+export type AssignmentData = Record<string, Record<string, number>>;
+
 export type ProductionOrder = {
   id: string;
   nombreCliente: string;
@@ -30,6 +32,7 @@ export type ProductionOrder = {
   prioridad: number; // 1-5
   items: OrderItem[];
   stats?: ProductStats[];
+  assignments?: AssignmentData;
 };
 
 export type Task = {
