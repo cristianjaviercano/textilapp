@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import type { Operative, Task } from '@/lib/types';
-import { runAutomatedAssignment } from '../actions';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, Wand2, Info, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -89,13 +88,10 @@ export default function AssignmentPage() {
 
     const task = data.tasks.find(t => t.id === taskId);
     if (!task) return;
-
+    
     const unitsPerHour = data.unitsPerHour?.[task.productDescription] || 0;
     const requiredSam = task.unitSam * unitsPerHour;
     
-    // --- VALIDATION LOGIC ---
-
-    // Rule 1: Cannot be greater than SAM total Req for the activity
     const otherAssignmentsForTask = Object.entries(assignments[taskId] || {})
       .filter(([opId]) => opId !== operativeId)
       .reduce((sum, [, val]) => sum + val, 0);
@@ -106,16 +102,15 @@ export default function AssignmentPage() {
         toast({ title: "Límite de Tarea Excedido", description: `El SAM asignado no puede superar el SAM requerido de ${requiredSam.toFixed(2)}.`});
     }
 
-    // Rule 2: Cumulative value for an operative cannot exceed levelingUnit
     const otherAssignmentsForOperative = data.tasks
       .filter(t => t.id !== taskId)
       .reduce((sum, currentTask) => sum + (assignments[currentTask.id]?.[operativeId] || 0), 0);
-
-    const operativeTotal = otherAssignmentsForOperative;
-    const maxForOperative = data.levelingUnit - operativeTotal;
     
-    if (samToAssign > maxForOperative) {
-        samToAssign = maxForOperative < 0 ? 0 : maxForOperative;
+    const operativeTotal = otherAssignmentsForOperative + samToAssign;
+    const maxForOperative = data.levelingUnit;
+    
+    if (operativeTotal > maxForOperative) {
+        samToAssign = Math.max(0, maxForOperative - otherAssignmentsForOperative);
         toast({ title: "Límite de Operario Excedido", description: `La carga de ${operativeId} no puede superar los ${data.levelingUnit} min.`});
     }
 
@@ -134,11 +129,12 @@ export default function AssignmentPage() {
     const operativeTotals: Record<string, number> = {};
     data.operatives.forEach(op => operativeTotals[op.id] = 0);
 
-    data.tasks.forEach(task => {
-        Object.values(assignments[task.id] || {}).forEach((assignedSam, index) => {
-            const operativeId = data.operatives[index].id;
-            if(operativeTotals[operativeId] !== undefined) {
-                 operativeTotals[operativeId] += assignedSam;
+    Object.keys(assignments).forEach(taskId => {
+        Object.keys(assignments[taskId]).forEach(operativeId => {
+            if (operativeTotals[operativeId] !== undefined) {
+                operativeTotals[operativeId] += assignments[taskId][operativeId];
+            } else {
+                operativeTotals[operativeId] = assignments[taskId][operativeId];
             }
         });
     });
@@ -153,15 +149,6 @@ export default function AssignmentPage() {
             totalTasks++;
             totalUnitSam += task.unitSam;
             totalPackageTime += task.unitSam * data.packageSize;
-            
-            data.operatives.forEach(op => {
-                const assignedSam = assignments[task.id]?.[op.id] || 0;
-                if(operativeTotals[op.id] !== undefined) {
-                    operativeTotals[op.id] += assignedSam;
-                } else {
-                    operativeTotals[op.id] = assignedSam;
-                }
-            });
         });
 
         acc[productName] = {
@@ -187,34 +174,63 @@ export default function AssignmentPage() {
   }, [data, assignments, tasksByProduct]);
 
 
-  const handleAutoAssign = async () => {
+  const handleAutoAssign = () => {
     if (!data) return;
     setIsLoading(true);
     setAiSummary(null);
 
-    const input = {
-      operatives: data.operatives.map(op => ({ operativeId: op.id, tiempoDisponible: data.levelingUnit })),
-      tasks: data.tasks.map(task => ({ orderId: task.id, prenda: task.productDescription, operacion: task.operation, samRequeridoTotal: task.unitSam })),
-      nivelacionUnidad: data.levelingUnit,
-    };
-    
-    const result = await runAutomatedAssignment(input);
-    setIsLoading(false);
+    const newAssignments: Record<string, Record<string, number>> = {};
+    const operativeLoads: Record<string, number> = data.operatives.reduce((acc, op) => {
+        acc[op.id] = 0;
+        return acc;
+    }, {} as Record<string, number>);
 
-    if (result.success && result.data) {
-      const newAssignments: Record<string, Record<string, number>> = {};
-      result.data.assignments.forEach(a => {
-        if (!newAssignments[a.taskId]) {
-          newAssignments[a.taskId] = {};
+    let currentOperativeIndex = 0;
+    
+    // Order tasks by their original production consecutive number
+    const sortedTasks = [...data.tasks].sort((a, b) => a.consecutivo - b.consecutivo);
+
+    for (const task of sortedTasks) {
+        const samToAssign = task.unitSam;
+        let assigned = false;
+
+        // Start searching from the current operative
+        let searchIndex = currentOperativeIndex;
+        
+        while (searchIndex < data.operatives.length && !assigned) {
+            const operative = data.operatives[searchIndex];
+            
+            if ((operativeLoads[operative.id] + samToAssign) <= data.levelingUnit) {
+                operativeLoads[operative.id] += samToAssign;
+                
+                if (!newAssignments[task.id]) {
+                    newAssignments[task.id] = {};
+                }
+                newAssignments[task.id][operative.id] = samToAssign;
+                
+                assigned = true;
+                // Important: Stay on the same operative for the next task
+                currentOperativeIndex = searchIndex; 
+            } else {
+                // If it doesn't fit, move to the next operative for the same task
+                searchIndex++;
+            }
         }
-        newAssignments[a.taskId][a.operativeId] = a.samAsignado;
-      });
-      setAssignments(newAssignments);
-      setAiSummary(result.data.summary);
-      toast({ title: "Éxito", description: "Las tareas han sido asignadas automáticamente." });
-    } else {
-      toast({ variant: "destructive", title: "Error", description: result.error || "Fallo al obtener la asignación de la IA." });
+
+        // If the task was assigned, we continue to the next task with the same operative index
+        // If not assigned after checking all subsequent operatives, it means there's no room.
+        // We reset the operative index to try from the start for the next task if needed, or handle unassigned tasks.
+        if (!assigned) {
+          // Task could not be assigned to any operative from the current one onwards.
+          // Optional: handle unassigned tasks, e.g., by logging or alerting.
+          console.log(`Task ${task.operation} could not be assigned.`);
+        }
     }
+
+    setAssignments(newAssignments);
+    setAiSummary("Asignación automática completada con el algoritmo de nivelación secuencial.");
+    setIsLoading(false);
+    toast({ title: "Éxito", description: "Las tareas han sido asignadas automáticamente." });
   };
 
   if (isLoading || !data) {
@@ -245,7 +261,7 @@ export default function AssignmentPage() {
       {aiSummary && (
         <Alert>
           <Info className="h-4 w-4" />
-          <AlertTitle>Resumen de Asignación de IA</AlertTitle>
+          <AlertTitle>Resumen de Asignación</AlertTitle>
           <AlertDescription>{aiSummary}</AlertDescription>
         </Alert>
       )}
@@ -281,7 +297,9 @@ export default function AssignmentPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {tasksByProduct[productName].map((task, index) => {
+                        {tasksByProduct[productName]
+                         .sort((a, b) => a.consecutivo - b.consecutivo)
+                         .map((task, index) => {
                           const unitsPerHour = data.unitsPerHour?.[productName] || 0;
                           const requiredSam = task.unitSam * unitsPerHour;
                           const assigned = Object.values(assignments[task.id] || {}).reduce((sum, val) => sum + val, 0);
@@ -289,7 +307,7 @@ export default function AssignmentPage() {
                           const timePerPackage = task.unitSam * data.packageSize;
                           return (
                             <TableRow key={task.id}>
-                              <TableCell className="sticky left-0 bg-card z-10 font-medium text-center w-[60px]">{index + 1}</TableCell>
+                              <TableCell className="sticky left-0 bg-card z-10 font-medium text-center w-[60px]">{task.consecutivo}</TableCell>
                               <TableCell className="sticky left-16 bg-card z-10 font-medium w-[250px]">
                                 <div>{task.operation}</div>
                                 <div className="text-xs text-muted-foreground">{task.orderId}</div>
@@ -316,8 +334,7 @@ export default function AssignmentPage() {
                       </TableBody>
                       <TableFooter>
                          <TableRow className="bg-secondary/70 hover:bg-secondary/70 font-bold">
-                            <TableCell colSpan={2} className="sticky left-0 bg-secondary/70 z-10">Totales</TableCell>
-                            <TableCell className="text-center">{summaryTotals.totalsByProduct[productName]?.totalTasks || 0}</TableCell>
+                            <TableCell colSpan={3} className="sticky left-0 bg-secondary/70 z-10">Totales</TableCell>
                             <TableCell className="text-right">{summaryTotals.totalsByProduct[productName]?.totalUnitSam.toFixed(2) || '0.00'}</TableCell>
                             <TableCell className="text-right">{summaryTotals.totalsByProduct[productName]?.totalPackageTime.toFixed(2) || '0.00'}</TableCell>
                             <TableCell colSpan={2}></TableCell>
@@ -352,5 +369,3 @@ export default function AssignmentPage() {
     </div>
   );
 }
-
-    
