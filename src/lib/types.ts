@@ -15,12 +15,21 @@ export type OrderItem = {
   cantidad: number;
 };
 
+export type ProductStats = {
+  descripcion: string;
+  totalSam: number;
+  loteSize: number;
+  unitsPerHour: number;
+  unitsPerDay: number;
+};
+
 export type ProductionOrder = {
   id: string;
   nombreCliente: string;
   fechaEntrega: string;
   prioridad: number; // 1-5
   items: OrderItem[];
+  stats?: ProductStats[];
 };
 
 export type Task = {

@@ -11,22 +11,13 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { mockProducts } from '@/data/mock-data';
-import type { Task, ProductionOrder, Product } from '@/lib/types';
+import type { Task, ProductionOrder, Product, ProductStats } from '@/lib/types';
 import { ArrowRight, Calculator } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 const ORDERS_LOCAL_STORAGE_KEY = 'productionOrders';
 const SCHEDULING_STATS_KEY = 'schedulingInitialStats';
 const SCHEDULING_PARAMS_KEY = 'schedulingParams';
-
-
-interface ProductStats {
-  descripcion: string;
-  totalSam: number;
-  loteSize: number;
-  unitsPerHour: number;
-  unitsPerDay: number;
-}
 
 export default function SchedulingPage() {
   const router = useRouter();
@@ -153,6 +144,18 @@ export default function SchedulingPage() {
   };
 
   const handleLevelJobs = () => {
+    const selectedOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
+    
+    // Save stats to selected orders
+    const updatedOrders = availableOrders.map(order => {
+      if (selectedOrderIds.includes(order.id)) {
+        return { ...order, stats: initialStats };
+      }
+      return order;
+    });
+    localStorage.setItem(ORDERS_LOCAL_STORAGE_KEY, JSON.stringify(updatedOrders));
+
+
     const schedulingData = {
       operatives: Array.from({ length: numOperatives }, (_, i) => ({
         id: `Op ${i + 1}`,
@@ -296,5 +299,3 @@ export default function SchedulingPage() {
     </div>
   );
 }
-
-    
