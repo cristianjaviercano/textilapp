@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import type { Operative, Task, Assignment } from '@/lib/types';
 import { runAutomatedAssignment } from '../actions';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, Wand2, Info } from 'lucide-react';
+import { Loader2, Wand2, Info, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 
@@ -102,15 +102,21 @@ export default function AssignmentPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold font-headline">Matriz de Asignación</h1>
           <p className="text-muted-foreground">Ajuste manualmente o asigne automáticamente la carga de trabajo a los operarios.</p>
         </div>
-        <Button onClick={handleAutoAssign} disabled={isLoading}>
-          {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-          Asignar Automáticamente
-        </Button>
+        <div className="flex gap-2">
+            <Button variant="outline" onClick={() => router.push('/scheduling')}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Regresar
+            </Button>
+            <Button onClick={handleAutoAssign} disabled={isLoading}>
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                Asignar Automáticamente
+            </Button>
+        </div>
       </div>
 
       {aiSummary && (

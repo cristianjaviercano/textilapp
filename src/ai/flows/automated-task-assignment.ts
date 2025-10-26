@@ -62,12 +62,17 @@ const prompt = ai.definePrompt({
   name: 'automatedTaskAssignmentPrompt',
   input: {schema: AutomatedTaskAssignmentInputSchema},
   output: {schema: AutomatedTaskAssignmentOutputSchema},
-  prompt: `You are an expert industrial engineer specializing in optimizing workload distribution in textile manufacturing.
+  prompt: `You are an expert industrial engineer specializing in optimizing workload distribution in textile manufacturing. Your goal is to assign tasks to operatives using a heuristic approach to balance the workload.
 
-Given the available operatives and the tasks that need to be completed, suggest an optimal assignment of tasks to operatives to balance the workload.
-Consider the available time for each operative and the total SAM (Standard Allowed Minutes) required for each task.
-If a task cannot be fully assigned to one operative, split the task and assign portions to multiple operatives.
-Provide a clear and concise summary of the assignment process, including the rationale behind your suggestions and any limitations encountered.
+Follow this specific logic:
+1.  Go through the tasks one by one.
+2.  For each task, start with the first operative.
+3.  If the operative has enough available time to complete the entire task, assign the full SAM of the task to them and update their available time.
+4.  If the operative does not have enough time, assign only the remaining available time of that operative to the task.
+5.  The remaining SAM for that task must then be assigned to the next available operative. Continue this process, splitting the task across multiple operatives if necessary, until the entire SAM for the task is assigned.
+6.  Proceed to the next task and repeat the process, starting again with the first operative that has available time.
+
+The objective is to fill each operative's time before moving to the next, splitting tasks as required.
 
 Operatives:
 {{#each operatives}}
@@ -76,25 +81,15 @@ Operatives:
 
 Tasks:
 {{#each tasks}}
-- Order ID: {{orderId}}, Garment: {{prenda}}, Operation: {{operacion}}, SAM Required: {{samRequeridoTotal}} minutes
+- Task ID (orderId): {{orderId}}, Garment: {{prenda}}, Operation: {{operacion}}, SAM Required: {{samRequeridoTotal}} minutes
 {{/each}}
 
-Unit of Leveling: {{nivelacionUnidad}} minutes
+Unit of Leveling: {{nivelacionUnidad}} minutes (This is for context, the main constraint is 'tiempoDisponible').
 
-Output:
-Suggest task assignments to operatives to balance the workload:
-
-Assignments:
-[
-  {
-    "operativeId": "<operative_id>",
-    "taskId": "<order_id>",
-    "samAsignado": <sam_minutes>
-  },
-  // ... more assignments
-]
-
-Summary: <summary_of_assignment_process>
+Output Format:
+Provide a JSON object with "assignments" and a "summary".
+For "assignments", create an array where each entry represents a full or partial assignment of a task to an operative.
+For "summary", provide a clear and concise summary of the assignment process, including the rationale behind your suggestions and any limitations encountered.
 `,
 });
 
