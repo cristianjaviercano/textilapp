@@ -166,9 +166,7 @@ export default function AssignmentPage() {
       return acc;
     }, {} as Record<string, number>);
 
-    const sortedTasks = [...data.tasks].sort((a, b) => a.consecutivo - b.consecutivo);
-
-    for (const task of sortedTasks) {
+    for (const task of data.tasks) {
         const unitsPerHour = data.unitsPerHour?.[task.productDescription] || 0;
         let samToDistribute = task.unitSam * unitsPerHour;
         if(samToDistribute === 0) continue;
