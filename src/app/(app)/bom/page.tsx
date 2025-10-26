@@ -41,13 +41,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const initialProductState: Omit<Product, "id"> = {
-  reference: "",
-  description: "",
-  family: "",
-  process: "",
-  consecutive: 0,
-  operation: "",
-  machine: "",
+  referencia: "",
+  descripcion: "",
+  familia: "",
+  proceso: "",
+  consecutivo: 0,
+  operacion: "",
+  maquina: "",
   sam: 0,
 };
 
@@ -105,7 +105,7 @@ export default function BomPage() {
       // In a real app, you would parse the CSV here.
       // For now, we just log it.
       console.log("CSV file selected:", file.name);
-      alert(`CSV Loading: ${file.name} selected. Parsing logic would be implemented here.`);
+      alert(`Carga de CSV: ${file.name} seleccionado. La lógica de análisis se implementaría aquí.`);
     }
   };
 
@@ -113,20 +113,20 @@ export default function BomPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold font-headline">BOM Management</h1>
+          <h1 className="text-3xl font-bold font-headline">Gestión de BOM</h1>
           <p className="text-muted-foreground">
-            View, add, and manage product operations.
+            Ver, agregar y gestionar operaciones de productos.
           </p>
         </div>
         <div className="flex gap-2">
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv" className="hidden" />
             <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
                 <FileUp className="mr-2" />
-                Load CSV
+                Cargar CSV
             </Button>
             <Button onClick={() => handleOpenDialog()}>
                 <PlusCircle className="mr-2" />
-                Add Operation
+                Añadir Operación
             </Button>
         </div>
       </div>
@@ -135,10 +135,10 @@ export default function BomPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Reference</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Operation</TableHead>
-              <TableHead>Machine</TableHead>
+              <TableHead>Referencia</TableHead>
+              <TableHead>Descripción</TableHead>
+              <TableHead>Operación</TableHead>
+              <TableHead>Máquina</TableHead>
               <TableHead className="text-right">SAM (min)</TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
@@ -146,25 +146,25 @@ export default function BomPage() {
           <TableBody>
             {products.map((product) => (
               <TableRow key={product.id}>
-                <TableCell className="font-medium">{product.reference}</TableCell>
-                <TableCell>{product.description}</TableCell>
-                <TableCell>{product.operation}</TableCell>
-                <TableCell>{product.machine}</TableCell>
+                <TableCell className="font-medium">{product.referencia}</TableCell>
+                <TableCell>{product.descripcion}</TableCell>
+                <TableCell>{product.operacion}</TableCell>
+                <TableCell>{product.maquina}</TableCell>
                 <TableCell className="text-right">{product.sam.toFixed(2)}</TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="h-8 w-8 p-0">
-                        <span className="sr-only">Open menu</span>
+                        <span className="sr-only">Abrir menú</span>
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => handleOpenDialog(product)}>
-                        <Pencil className="mr-2 h-4 w-4"/> Edit
+                        <Pencil className="mr-2 h-4 w-4"/> Editar
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleOpenAlert(product)} className="text-red-500 focus:text-red-500">
-                        <Trash2 className="mr-2 h-4 w-4"/> Delete
+                        <Trash2 className="mr-2 h-4 w-4"/> Borrar
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -178,39 +178,39 @@ export default function BomPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>{isEditing ? "Edit Operation" : "Add New Operation"}</DialogTitle>
+            <DialogTitle>{isEditing ? "Editar Operación" : "Añadir Nueva Operación"}</DialogTitle>
             <DialogDescription>
-              Fill in the details for the product operation.
+              Rellene los detalles de la operación del producto.
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="reference">Reference</Label>
-              <Input id="reference" value={currentProduct?.reference || ''} onChange={(e) => setCurrentProduct({...currentProduct, reference: e.target.value })} />
+              <Label htmlFor="referencia">Referencia</Label>
+              <Input id="referencia" value={currentProduct?.referencia || ''} onChange={(e) => setCurrentProduct({...currentProduct, referencia: e.target.value })} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Input id="description" value={currentProduct?.description || ''} onChange={(e) => setCurrentProduct({...currentProduct, description: e.target.value })} />
+              <Label htmlFor="descripcion">Descripción</Label>
+              <Input id="descripcion" value={currentProduct?.descripcion || ''} onChange={(e) => setCurrentProduct({...currentProduct, descripcion: e.target.value })} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="family">Family</Label>
-              <Input id="family" value={currentProduct?.family || ''} onChange={(e) => setCurrentProduct({...currentProduct, family: e.target.value })} />
+              <Label htmlFor="familia">Familia</Label>
+              <Input id="familia" value={currentProduct?.familia || ''} onChange={(e) => setCurrentProduct({...currentProduct, familia: e.target.value })} />
             </div>
              <div className="space-y-2">
-              <Label htmlFor="process">Process</Label>
-              <Input id="process" value={currentProduct?.process || ''} onChange={(e) => setCurrentProduct({...currentProduct, process: e.target.value })} />
+              <Label htmlFor="proceso">Proceso</Label>
+              <Input id="proceso" value={currentProduct?.proceso || ''} onChange={(e) => setCurrentProduct({...currentProduct, proceso: e.target.value })} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="operation">Operation</Label>
-              <Input id="operation" value={currentProduct?.operation || ''} onChange={(e) => setCurrentProduct({...currentProduct, operation: e.target.value })} />
+              <Label htmlFor="operacion">Operación</Label>
+              <Input id="operacion" value={currentProduct?.operacion || ''} onChange={(e) => setCurrentProduct({...currentProduct, operacion: e.target.value })} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="machine">Machine</Label>
-              <Input id="machine" value={currentProduct?.machine || ''} onChange={(e) => setCurrentProduct({...currentProduct, machine: e.target.value })} />
+              <Label htmlFor="maquina">Máquina</Label>
+              <Input id="maquina" value={currentProduct?.maquina || ''} onChange={(e) => setCurrentProduct({...currentProduct, maquina: e.target.value })} />
             </div>
              <div className="space-y-2">
-              <Label htmlFor="consecutive">Consecutive</Label>
-              <Input id="consecutive" type="number" value={currentProduct?.consecutive || 0} onChange={(e) => setCurrentProduct({...currentProduct, consecutive: parseInt(e.target.value, 10) })} />
+              <Label htmlFor="consecutivo">Consecutivo</Label>
+              <Input id="consecutivo" type="number" value={currentProduct?.consecutivo || 0} onChange={(e) => setCurrentProduct({...currentProduct, consecutivo: parseInt(e.target.value, 10) })} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="sam">SAM (min)</Label>
@@ -218,8 +218,8 @@ export default function BomPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="secondary" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSaveChanges}>Save Changes</Button>
+            <Button variant="secondary" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveChanges}>Guardar Cambios</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -227,14 +227,14 @@ export default function BomPage() {
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the operation for <span className="font-bold">{productToDelete?.reference} - {productToDelete?.operation}</span>.
+              Esta acción no se puede deshacer. Esto eliminará permanentemente la operación para <span className="font-bold">{productToDelete?.referencia} - {productToDelete?.operacion}</span>.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteProduct} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteProduct} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Borrar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

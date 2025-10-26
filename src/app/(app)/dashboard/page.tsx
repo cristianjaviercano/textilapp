@@ -10,28 +10,28 @@ import Link from "next/link";
 
 const modules = [
   {
-    title: "BOM Management",
+    title: "Gestión de BOM",
     href: "/bom",
     icon: FileText,
-    description: "Manage Bill of Materials: products, operations, and machines.",
+    description: "Gestionar lista de materiales: productos, operaciones y máquinas.",
   },
   {
-    title: "Production Orders",
+    title: "Órdenes de Producción",
     href: "/orders",
     icon: PackagePlus,
-    description: "Create, view, and manage all customer production orders.",
+    description: "Crear, ver y gestionar todas las órdenes de producción de clientes.",
   },
   {
-    title: "Workload Scheduling",
+    title: "Programación de Carga",
     href: "/scheduling",
     icon: Users,
-    description: "Balance workload and assign tasks to operatives.",
+    description: "Balancear la carga de trabajo y asignar tareas a los operarios.",
   },
   {
-    title: "Reports & Analytics",
+    title: "Reportes y Analíticas",
     href: "/reports",
     icon: BarChart3,
-    description: "Visualize schedules with Gantt charts and performance KPIs.",
+    description: "Visualizar programaciones con diagramas de Gantt y KPIs de rendimiento.",
   },
 ];
 
@@ -43,7 +43,7 @@ export default function DashboardPage() {
           TextileFlow Scheduler
         </h1>
         <p className="text-muted-foreground mt-1">
-          The central hub for managing your textile production workflow.
+          El centro de control para gestionar tu flujo de trabajo de producción textil.
         </p>
       </header>
       <div className="grid gap-6 md:grid-cols-2">
@@ -65,14 +65,14 @@ export default function DashboardPage() {
       </div>
        <Card>
         <CardHeader>
-          <CardTitle>Getting Started</CardTitle>
+          <CardTitle>Para Empezar</CardTitle>
         </CardHeader>
         <CardContent>
           <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-              <li>Start by populating your products and operations in <Link href="/bom" className="font-semibold text-foreground hover:underline">BOM Management</Link>.</li>
-              <li>Create new production requests in <Link href="/orders" className="font-semibold text-foreground hover:underline">Production Orders</Link>.</li>
-              <li>Go to <Link href="/scheduling" className="font-semibold text-foreground hover:underline">Scheduling</Link> to balance and assign the work.</li>
-              <li>Finally, check results and KPIs in <Link href="/reports" className="font-semibold text-foreground hover:underline">Reports</Link>.</li>
+              <li>Comienza por poblar tus productos y operaciones en <Link href="/bom" className="font-semibold text-foreground hover:underline">Gestión de BOM</Link>.</li>
+              <li>Crea nuevas solicitudes de producción en <Link href="/orders" className="font-semibold text-foreground hover:underline">Órdenes de Producción</Link>.</li>
+              <li>Ve a <Link href="/scheduling" className="font-semibold text-foreground hover:underline">Programación</Link> para balancear y asignar el trabajo.</li>
+              <li>Finalmente, revisa los resultados y KPIs en <Link href="/reports" className="font-semibold text-foreground hover:underline">Reportes</Link>.</li>
           </ol>
         </CardContent>
       </Card>

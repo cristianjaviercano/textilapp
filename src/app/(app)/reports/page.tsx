@@ -28,15 +28,15 @@ import { ChartConfig } from '@/components/ui/chart';
 // This is mock data representing a completed schedule.
 // In a real app, this would come from the assignment results.
 const mockScheduleData = [
-  { task: 'Cut Fabric', operative: 'Op 1', start: 0, end: 550, fill: "var(--color-op1)" },
-  { task: 'Sew Sleeves', operative: 'Op 2', start: 0, end: 820, fill: "var(--color-op2)" },
-  { task: 'Attach Collar', operative: 'Op 3', start: 0, end: 410, fill: "var(--color-op3)" },
-  { task: 'Cut Denim', operative: 'Op 1', start: 550, end: 900, fill: "var(--color-op1)" },
-  { task: 'Sew Legs', operative: 'Op 4', start: 0, end: 765, fill: "var(--color-op4)" },
-  { task: 'Add Pockets', operative: 'Op 5', start: 0, end: 640, fill: "var(--color-op5)" },
-  { task: 'Cut Fabric', operative: 'Op 6', start: 0, end: 450, fill: "var(--color-op6)" },
-  { task: 'Sew Body', operative: 'Op 7', start: 0, end: 712.5, fill: "var(--color-op7)" },
-  { task: 'Sew Sleeves', operative: 'Op 8', start: 0, end: 205, fill: "var(--color-op8)" },
+  { task: 'Cortar Tela', operative: 'Op 1', start: 0, end: 550, fill: "var(--color-op1)" },
+  { task: 'Coser Mangas', operative: 'Op 2', start: 0, end: 820, fill: "var(--color-op2)" },
+  { task: 'Unir Cuello', operative: 'Op 3', start: 0, end: 410, fill: "var(--color-op3)" },
+  { task: 'Cortar Denim', operative: 'Op 1', start: 550, end: 900, fill: "var(--color-op1)" },
+  { task: 'Coser Piernas', operative: 'Op 4', start: 0, end: 765, fill: "var(--color-op4)" },
+  { task: 'Añadir Bolsillos', operative: 'Op 5', start: 0, end: 640, fill: "var(--color-op5)" },
+  { task: 'Cortar Tela', operative: 'Op 6', start: 0, end: 450, fill: "var(--color-op6)" },
+  { task: 'Coser Cuerpo', operative: 'Op 7', start: 0, end: 712.5, fill: "var(--color-op7)" },
+  { task: 'Coser Mangas', operative: 'Op 8', start: 0, end: 205, fill: "var(--color-op8)" },
 ];
 
 const chartConfig = {
@@ -82,12 +82,12 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold font-headline">Reports & Analytics</h1>
-          <p className="text-muted-foreground">Visualize schedules and key performance indicators.</p>
+          <h1 className="text-3xl font-bold font-headline">Reportes y Analíticas</h1>
+          <p className="text-muted-foreground">Visualizar programaciones e indicadores clave de rendimiento.</p>
         </div>
-        <Button variant="outline" onClick={() => alert("PDF export functionality would be implemented here.")}>
+        <Button variant="outline" onClick={() => alert("La funcionalidad de exportar a PDF se implementaría aquí.")}>
           <Download className="mr-2 h-4 w-4" />
-          Export to PDF
+          Exportar a PDF
         </Button>
       </div>
 
@@ -98,43 +98,43 @@ export default function ReportsPage() {
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{kpis.makespan}</div>
-                    <p className="text-xs text-muted-foreground">Total time to complete all tasks</p>
+                    <p className="text-xs text-muted-foreground">Tiempo total para completar todas las tareas</p>
                 </CardContent>
             </Card>
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Overall Utilization</CardTitle>
+                    <CardTitle className="text-sm font-medium">Utilización General</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{kpis.utilization}</div>
-                     <p className="text-xs text-muted-foreground">Based on {kpis.operatives} operatives</p>
+                     <p className="text-xs text-muted-foreground">Basado en {kpis.operatives} operarios</p>
                 </CardContent>
             </Card>
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
+                    <CardTitle className="text-sm font-medium">Tareas Totales</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{kpis.tasks}</div>
-                    <p className="text-xs text-muted-foreground">Assigned across all operatives</p>
+                    <p className="text-xs text-muted-foreground">Asignadas a todos los operarios</p>
                 </CardContent>
             </Card>
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Operatives</CardTitle>
+                    <CardTitle className="text-sm font-medium">Operarios</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{kpis.operatives}</div>
-                    <p className="text-xs text-muted-foreground">Included in schedule</p>
+                    <p className="text-xs text-muted-foreground">Incluidos en la programación</p>
                 </CardContent>
             </Card>
         </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Gantt Chart Simulation</CardTitle>
+          <CardTitle>Simulación de Diagrama de Gantt</CardTitle>
           <CardDescription>
-            This chart shows the total time (SAM) allocated to each task, distributed by operative.
+            Este gráfico muestra el tiempo total (SAM) asignado a cada tarea, distribuido por operario.
           </CardDescription>
         </CardHeader>
         <CardContent>

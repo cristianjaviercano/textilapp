@@ -43,9 +43,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 
 const initialOrderState: Omit<ProductionOrder, "id"> = {
-  clientName: "",
-  deliveryDate: "",
-  priority: 3,
+  nombreCliente: "",
+  fechaEntrega: "",
+  prioridad: 3,
   items: [],
 };
 
@@ -57,7 +57,7 @@ export default function OrdersPage() {
   const [orderToDelete, setOrderToDelete] = useState<ProductionOrder | null>(null);
   
   const productReferences = useMemo(() => {
-    const refs = mockProducts.map(p => p.reference);
+    const refs = mockProducts.map(p => p.referencia);
     return [...new Set(refs)];
   }, []);
 
@@ -70,7 +70,7 @@ export default function OrdersPage() {
   
   const handleAddItem = () => {
     if (currentOrder && currentOrder.items) {
-      const newItem: OrderItem = { reference: '', quantity: 1 };
+      const newItem: OrderItem = { referencia: '', cantidad: 1 };
       setCurrentOrder({ ...currentOrder, items: [...currentOrder.items, newItem] });
     }
   };
@@ -120,12 +120,12 @@ export default function OrdersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold font-headline">Production Orders</h1>
-          <p className="text-muted-foreground">Create and manage customer orders.</p>
+          <h1 className="text-3xl font-bold font-headline">Órdenes de Producción</h1>
+          <p className="text-muted-foreground">Crear y gestionar órdenes de clientes.</p>
         </div>
         <Button onClick={() => handleOpenDialog()}>
           <PlusCircle className="mr-2" />
-          Add Order
+          Añadir Orden
         </Button>
       </div>
 
@@ -133,11 +133,11 @@ export default function OrdersPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Order ID</TableHead>
-              <TableHead>Client</TableHead>
+              <TableHead>ID Orden</TableHead>
+              <TableHead>Cliente</TableHead>
               <TableHead>Items</TableHead>
-              <TableHead>Delivery Date</TableHead>
-              <TableHead>Priority</TableHead>
+              <TableHead>Fecha Entrega</TableHead>
+              <TableHead>Prioridad</TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
           </TableHeader>
@@ -145,18 +145,18 @@ export default function OrdersPage() {
             {orders.map((order) => (
               <TableRow key={order.id}>
                 <TableCell className="font-medium">{order.id}</TableCell>
-                <TableCell>{order.clientName}</TableCell>
-                <TableCell>{order.items.reduce((acc, item) => acc + item.quantity, 0)}</TableCell>
-                <TableCell>{order.deliveryDate}</TableCell>
-                <TableCell><Badge variant="secondary">{order.priority}</Badge></TableCell>
+                <TableCell>{order.nombreCliente}</TableCell>
+                <TableCell>{order.items.reduce((acc, item) => acc + item.cantidad, 0)}</TableCell>
+                <TableCell>{order.fechaEntrega}</TableCell>
+                <TableCell><Badge variant="secondary">{order.prioridad}</Badge></TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleOpenDialog(order)}><Pencil className="mr-2 h-4 w-4"/> Edit</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleOpenAlert(order)} className="text-red-500 focus:text-red-500"><Trash2 className="mr-2 h-4 w-4"/> Delete</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleOpenDialog(order)}><Pencil className="mr-2 h-4 w-4"/> Editar</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleOpenAlert(order)} className="text-red-500 focus:text-red-500"><Trash2 className="mr-2 h-4 w-4"/> Borrar</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
@@ -169,34 +169,34 @@ export default function OrdersPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{isEditing ? "Edit Order" : "Add New Order"}</DialogTitle>
+            <DialogTitle>{isEditing ? "Editar Orden" : "Añadir Nueva Orden"}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
-            <div className="space-y-2"><Label>Client Name</Label><Input value={currentOrder?.clientName || ''} onChange={(e) => setCurrentOrder({...currentOrder, clientName: e.target.value })} /></div>
-            <div className="space-y-2"><Label>Delivery Date</Label><Input type="date" value={currentOrder?.deliveryDate || ''} onChange={(e) => setCurrentOrder({...currentOrder, deliveryDate: e.target.value })} /></div>
-            <div className="space-y-2"><Label>Priority</Label><Input type="number" min="1" max="5" value={currentOrder?.priority || 3} onChange={(e) => setCurrentOrder({...currentOrder, priority: parseInt(e.target.value) })} /></div>
+            <div className="space-y-2"><Label>Nombre Cliente</Label><Input value={currentOrder?.nombreCliente || ''} onChange={(e) => setCurrentOrder({...currentOrder, nombreCliente: e.target.value })} /></div>
+            <div className="space-y-2"><Label>Fecha Entrega</Label><Input type="date" value={currentOrder?.fechaEntrega || ''} onChange={(e) => setCurrentOrder({...currentOrder, fechaEntrega: e.target.value })} /></div>
+            <div className="space-y-2"><Label>Prioridad</Label><Input type="number" min="1" max="5" value={currentOrder?.prioridad || 3} onChange={(e) => setCurrentOrder({...currentOrder, prioridad: parseInt(e.target.value) })} /></div>
           </div>
           <div>
-            <h3 className="mb-2 font-medium">Order Items</h3>
+            <h3 className="mb-2 font-medium">Items de la Orden</h3>
             <div className="space-y-2">
               {currentOrder?.items?.map((item, index) => (
                 <div key={index} className="flex items-center gap-2">
-                  <Select value={item.reference} onValueChange={(value) => handleItemChange(index, 'reference', value)}>
-                    <SelectTrigger><SelectValue placeholder="Select Product" /></SelectTrigger>
+                  <Select value={item.referencia} onValueChange={(value) => handleItemChange(index, 'referencia', value)}>
+                    <SelectTrigger><SelectValue placeholder="Seleccionar Producto" /></SelectTrigger>
                     <SelectContent>
                       {productReferences.map(ref => <SelectItem key={ref} value={ref}>{ref}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <Input type="number" min="1" placeholder="Qty" className="w-24" value={item.quantity} onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value))} />
+                  <Input type="number" min="1" placeholder="Cant" className="w-24" value={item.cantidad} onChange={(e) => handleItemChange(index, 'cantidad', parseInt(e.target.value))} />
                   <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(index)}><X className="h-4 w-4" /></Button>
                 </div>
               ))}
             </div>
-            <Button variant="outline" size="sm" className="mt-2" onClick={handleAddItem}><PlusCircle className="mr-2 h-4 w-4"/>Add Item</Button>
+            <Button variant="outline" size="sm" className="mt-2" onClick={handleAddItem}><PlusCircle className="mr-2 h-4 w-4"/>Añadir Item</Button>
           </div>
           <DialogFooter>
-            <Button variant="secondary" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSaveChanges}>Save Changes</Button>
+            <Button variant="secondary" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveChanges}>Guardar Cambios</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -204,12 +204,12 @@ export default function OrdersPage() {
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>This will permanently delete order <span className="font-bold">{orderToDelete?.id}</span>.</AlertDialogDescription>
+            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogDescription>Esto eliminará permanentemente la orden <span className="font-bold">{orderToDelete?.id}</span>.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteOrder} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteOrder} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Borrar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

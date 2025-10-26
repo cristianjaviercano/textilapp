@@ -27,9 +27,9 @@ import { Separator } from "@/components/ui/separator";
 const navItems = [
   { href: "/dashboard", icon: LayoutGrid, label: "Dashboard" },
   { href: "/bom", icon: FileText, label: "BOM" },
-  { href: "/orders", icon: PackagePlus, label: "Orders" },
-  { href: "/scheduling", icon: Users, label: "Scheduling" },
-  { href: "/reports", icon: BarChart3, label: "Reports" },
+  { href: "/orders", icon: PackagePlus, label: "Órdenes" },
+  { href: "/scheduling", icon: Users, label: "Programación" },
+  { href: "/reports", icon: BarChart3, label: "Reportes" },
 ];
 
 function AppSidebar() {

@@ -1,30 +1,30 @@
 export type Product = {
   id: string;
-  reference: string;
-  description: string;
-  family: string;
-  process: string;
-  consecutive: number;
-  operation: string;
-  machine: string;
+  referencia: string;
+  descripcion: string;
+  familia: string;
+  proceso: string;
+  consecutivo: number;
+  operacion: string;
+  maquina: string;
   sam: number; // SAM-MINUTOS
 };
 
 export type OrderItem = {
-  reference: string; // product reference
-  quantity: number;
+  referencia: string; // product reference
+  cantidad: number;
 };
 
 export type ProductionOrder = {
   id: string;
-  clientName: string;
-  deliveryDate: string;
-  priority: number; // 1-5
+  nombreCliente: string;
+  fechaEntrega: string;
+  prioridad: number; // 1-5
   items: OrderItem[];
 };
 
 export type Task = {
-  id: string; // e.g., `${order.id}-${product.reference}-${operation.id}`
+  id: string; // e.g., `${order.id}-${product.referencia}-${operation.id}`
   orderId: string;
   productDescription: string; // prenda
   operation: string;

@@ -27,14 +27,14 @@ export default function SchedulingPage() {
       .filter(order => selectedOrderIds.includes(order.id))
       .forEach(order => {
         order.items.forEach(item => {
-          const productOps = mockProducts.filter(p => p.reference === item.reference);
+          const productOps = mockProducts.filter(p => p.referencia === item.referencia);
           productOps.forEach(op => {
             const task: Task = {
-              id: `${order.id}-${item.reference}-${op.id}`,
+              id: `${order.id}-${item.referencia}-${op.id}`,
               orderId: order.id,
-              productDescription: op.description,
-              operation: op.operation,
-              totalSam: op.sam * item.quantity,
+              productDescription: op.descripcion,
+              operation: op.operacion,
+              totalSam: op.sam * item.cantidad,
             };
             tasks.push(task);
           });
@@ -76,38 +76,38 @@ export default function SchedulingPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold font-headline">Workload Leveling</h1>
-        <p className="text-muted-foreground">Configure operatives, select orders, and prepare for task assignment.</p>
+        <h1 className="text-3xl font-bold font-headline">Nivelación de Carga de Trabajo</h1>
+        <p className="text-muted-foreground">Configure operarios, seleccione órdenes y prepárese para la asignación de tareas.</p>
       </div>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Operatives</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Operarios</CardTitle></CardHeader>
           <CardContent>
-            <Label htmlFor="num-operatives">Number of Operatives</Label>
+            <Label htmlFor="num-operatives">Número de Operarios</Label>
             <Input id="num-operatives" type="number" value={numOperatives} onChange={e => setNumOperatives(parseInt(e.target.value))} />
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Work Time</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Tiempo de Trabajo</CardTitle></CardHeader>
           <CardContent>
-            <Label htmlFor="work-time">Time per Operative (min)</Label>
+            <Label htmlFor="work-time">Tiempo por Operario (min)</Label>
             <Input id="work-time" type="number" value={workTime} onChange={e => setWorkTime(parseInt(e.target.value))} />
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Leveling</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Nivelación</CardTitle></CardHeader>
           <CardContent>
-            <Label htmlFor="leveling-unit">Unit of Leveling (min)</Label>
+            <Label htmlFor="leveling-unit">Unidad de Nivelación (min)</Label>
             <Input id="leveling-unit" type="number" value={levelingUnit} onChange={e => setLevelingUnit(parseInt(e.target.value))} />
           </CardContent>
         </Card>
         <Card className="flex flex-col justify-center bg-primary text-primary-foreground">
           <CardContent className="pt-6">
             <Button className="w-full bg-primary-foreground text-primary hover:bg-primary-foreground/90" disabled={!isAnyOrderSelected} onClick={handleLevelJobs}>
-              Level Jobs <ArrowRight className="ml-2 h-4 w-4" />
+              Nivelar Trabajos <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
-            {!isAnyOrderSelected && <p className="text-xs text-center mt-2 text-primary-foreground/70">Select at least one order</p>}
+            {!isAnyOrderSelected && <p className="text-xs text-center mt-2 text-primary-foreground/70">Seleccione al menos una orden</p>}
           </CardContent>
         </Card>
       </div>
@@ -115,8 +115,8 @@ export default function SchedulingPage() {
       <div className="grid lg:grid-cols-5 gap-6">
         <Card className="lg:col-span-3">
           <CardHeader>
-            <CardTitle>1. Select Orders to Produce</CardTitle>
-            <CardDescription>Choose the production orders you want to include in this schedule.</CardDescription>
+            <CardTitle>1. Seleccionar Órdenes a Producir</CardTitle>
+            <CardDescription>Elija las órdenes de producción que desea incluir en esta programación.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="border rounded-md">
@@ -124,9 +124,9 @@ export default function SchedulingPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[50px]"></TableHead>
-                    <TableHead>Order ID</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Delivery Date</TableHead>
+                    <TableHead>ID Orden</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Fecha Entrega</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -134,8 +134,8 @@ export default function SchedulingPage() {
                     <TableRow key={order.id} data-state={selectedOrders[order.id] && 'selected'}>
                       <TableCell><Checkbox checked={selectedOrders[order.id] || false} onCheckedChange={(checked) => handleSelectOrder(order.id, checked)} /></TableCell>
                       <TableCell className="font-medium">{order.id}</TableCell>
-                      <TableCell>{order.clientName}</TableCell>
-                      <TableCell>{order.deliveryDate}</TableCell>
+                      <TableCell>{order.nombreCliente}</TableCell>
+                      <TableCell>{order.fechaEntrega}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -146,16 +146,16 @@ export default function SchedulingPage() {
         
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>2. Required Workload</CardTitle>
-            <CardDescription>Total Standard Allowed Minutes (SAM) for selected orders.</CardDescription>
+            <CardTitle>2. Carga de Trabajo Requerida</CardTitle>
+            <CardDescription>Minutos Estándar Permitidos (SAM) totales para las órdenes seleccionadas.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="border rounded-md">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Operation</TableHead>
-                    <TableHead className="text-right">Total SAM</TableHead>
+                    <TableHead>Operación</TableHead>
+                    <TableHead className="text-right">SAM Total</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -165,7 +165,7 @@ export default function SchedulingPage() {
                       <TableCell className="text-right">{item.totalSam.toFixed(2)}</TableCell>
                     </TableRow>
                   )) : (
-                    <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground">No orders selected</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground">No hay órdenes seleccionadas</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>

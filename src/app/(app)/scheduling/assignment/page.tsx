@@ -90,9 +90,9 @@ export default function AssignmentPage() {
       });
       setAssignments(newAssignments);
       setAiSummary(result.data.summary);
-      toast({ title: "Success", description: "Tasks have been automatically assigned." });
+      toast({ title: "Éxito", description: "Las tareas han sido asignadas automáticamente." });
     } else {
-      toast({ variant: "destructive", title: "Error", description: result.error || "Failed to get AI assignment." });
+      toast({ variant: "destructive", title: "Error", description: result.error || "Fallo al obtener la asignación de la IA." });
     }
   };
 
@@ -104,19 +104,19 @@ export default function AssignmentPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold font-headline">Assignment Matrix</h1>
-          <p className="text-muted-foreground">Manually adjust or automatically assign workload to operatives.</p>
+          <h1 className="text-3xl font-bold font-headline">Matriz de Asignación</h1>
+          <p className="text-muted-foreground">Ajuste manualmente o asigne automáticamente la carga de trabajo a los operarios.</p>
         </div>
         <Button onClick={handleAutoAssign} disabled={isLoading}>
           {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-          Assign Automatically
+          Asignar Automáticamente
         </Button>
       </div>
 
       {aiSummary && (
         <Alert>
           <Info className="h-4 w-4" />
-          <AlertTitle>AI Assignment Summary</AlertTitle>
+          <AlertTitle>Resumen de Asignación de IA</AlertTitle>
           <AlertDescription>{aiSummary}</AlertDescription>
         </Alert>
       )}
@@ -127,9 +127,9 @@ export default function AssignmentPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky left-0 bg-card z-10 w-[300px]">Task</TableHead>
-                  <TableHead className="text-right w-[120px]">Required SAM</TableHead>
-                  <TableHead className="text-right w-[120px]">Assigned SAM</TableHead>
+                  <TableHead className="sticky left-0 bg-card z-10 w-[300px]">Tarea</TableHead>
+                  <TableHead className="text-right w-[120px]">SAM Requerido</TableHead>
+                  <TableHead className="text-right w-[120px]">SAM Asignado</TableHead>
                   {data.operatives.map(op => (
                     <TableHead key={op.id} className="text-center w-[150px]">{op.id}</TableHead>
                   ))}
@@ -165,7 +165,7 @@ export default function AssignmentPage() {
               </TableBody>
               <tfoot>
                 <TableRow className="bg-secondary hover:bg-secondary">
-                  <th colSpan={3} className="p-2 text-right font-bold sticky left-0 bg-secondary z-10">Operative Total Assigned</th>
+                  <th colSpan={3} className="p-2 text-right font-bold sticky left-0 bg-secondary z-10">Total Asignado por Operario</th>
                   {data.operatives.map(op => {
                      const total = totals.operativeTotals[op.id] || 0;
                      const available = op.availableTime;
