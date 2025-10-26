@@ -25,16 +25,32 @@ export default function AssignmentPage() {
   const [data, setData] = useState<SchedulingData | null>(null);
   const [assignments, setAssignments] = useState<Record<string, Record<string, number>>>({});
   const [aiSummary, setAiSummary] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Start as loading
 
   useEffect(() => {
-    const storedData = localStorage.getItem('schedulingData');
-    if (storedData) {
-      setData(JSON.parse(storedData));
-    } else {
-      router.push('/scheduling');
+    try {
+      const storedData = localStorage.getItem('schedulingData');
+      if (storedData) {
+        setData(JSON.parse(storedData));
+      } else {
+        toast({
+            variant: "destructive",
+            title: "Datos no encontrados",
+            description: "No se encontraron datos de programación. Redirigiendo...",
+        });
+        router.push('/scheduling');
+      }
+    } catch (error) {
+        toast({
+            variant: "destructive",
+            title: "Error al cargar datos",
+            description: "Hubo un problema al leer los datos de programación.",
+        });
+        router.push('/scheduling');
+    } finally {
+        setIsLoading(false); // Stop loading after data is processed or error handled
     }
-  }, [router]);
+  }, [router, toast]);
 
   const handleAssignmentChange = (taskId: string, operativeId: string, value: string) => {
     const sam = parseFloat(value) || 0;
@@ -96,7 +112,7 @@ export default function AssignmentPage() {
     }
   };
 
-  if (!data) {
+  if (isLoading || !data) {
     return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
 
