@@ -21,8 +21,11 @@ import {
   SidebarFooter,
   SidebarInset,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
+
 
 const navItems = [
   { href: "/dashboard", icon: LayoutGrid, label: "Dashboard" },
@@ -73,14 +76,27 @@ function AppSidebar() {
   );
 }
 
+
+function MainContent({ children }: { children: React.ReactNode }) {
+  const { state } = useSidebar();
+
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 h-full">
+      <SidebarTrigger className={cn("mb-4", state === 'expanded' && 'hidden')} />
+      {children}
+    </div>
+  );
+}
+
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider defaultOpen>
         <AppSidebar />
         <SidebarInset>
-            <div className="p-4 sm:p-6 lg:p-8 h-full">
+            <MainContent>
                 {children}
-            </div>
+            </MainContent>
         </SidebarInset>
     </SidebarProvider>
   );
