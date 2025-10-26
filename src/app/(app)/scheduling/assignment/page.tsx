@@ -28,10 +28,17 @@ export default function AssignmentPage() {
   const [isLoading, setIsLoading] = useState(true); // Start as loading
 
   useEffect(() => {
+    let storedData: string | null = null;
     try {
-      const storedData = localStorage.getItem('schedulingData');
+      storedData = localStorage.getItem('schedulingData');
       if (storedData) {
-        setData(JSON.parse(storedData));
+        const parsedData = JSON.parse(storedData);
+        // Basic validation
+        if(parsedData.operatives && parsedData.tasks) {
+          setData(parsedData);
+        } else {
+          throw new Error("Invalid data structure");
+        }
       } else {
         toast({
             variant: "destructive",
