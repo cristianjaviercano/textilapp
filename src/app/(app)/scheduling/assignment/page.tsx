@@ -98,11 +98,13 @@ export default function AssignmentPage() {
     const taskTotals: Record<string, { assigned: number, required: number }> = {};
     data.tasks.forEach(task => {
       taskTotals[task.id] = { assigned: 0, required: task.totalSam };
+      let currentTaskTotal = 0;
       data.operatives.forEach(op => {
         const assignedSam = assignments[task.id]?.[op.id] || 0;
         operativeTotals[op.id] += assignedSam;
-        taskTotals[task.id].assigned += assignedSam;
+        currentTaskTotal += assignedSam;
       });
+      taskTotals[task.id].assigned = currentTaskTotal;
     });
 
     return { operativeTotals, taskTotals };

@@ -66,11 +66,11 @@ const prompt = ai.definePrompt({
 
 Follow this specific logic:
 1.  Go through the tasks one by one.
-2.  For each task, start with the first operative.
+2.  For each task, start with the first operative that has available time.
 3.  If the operative has enough available time to complete the entire task, assign the full SAM of the task to them and update their available time.
 4.  If the operative does not have enough time, assign only the remaining available time of that operative to the task.
 5.  The remaining SAM for that task must then be assigned to the next available operative. Continue this process, splitting the task across multiple operatives if necessary, until the entire SAM for the task is assigned.
-6.  Proceed to the next task and repeat the process, starting again with the first operative that has available time.
+6.  Proceed to the next task and repeat the process.
 
 The objective is to fill each operative's time before moving to the next, splitting tasks as required.
 
@@ -84,12 +84,12 @@ Tasks:
 - Task ID (orderId): {{orderId}}, Garment: {{prenda}}, Operation: {{operacion}}, SAM Required: {{samRequeridoTotal}} minutes
 {{/each}}
 
-Unit of Leveling: {{nivelacionUnidad}} minutes (This is for context, the main constraint is 'tiempoDisponible').
+Unit of Leveling: {{nivelacionUnidad}} minutes (This is for context, the main constraint is 'tiempoDisponible'. The goal is to fill the available time).
 
 Output Format:
 Provide a JSON object with "assignments" and a "summary".
 For "assignments", create an array where each entry represents a full or partial assignment of a task to an operative.
-For "summary", provide a clear and concise summary of the assignment process, including the rationale behind your suggestions and any limitations encountered.
+For "summary", provide a clear and concise summary of the assignment process, including the rationale behind your suggestions, a warning if more operatives are needed, or a note if some operatives were not assigned any work.
 `,
 });
 
