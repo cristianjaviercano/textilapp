@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useTransition } from "react";
+import React, { useState, useMemo, useTransition, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -43,6 +43,8 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { saveOrdersData } from "./actions";
 
+const LOCAL_STORAGE_KEY = 'productionOrders';
+
 const initialOrderState: Omit<ProductionOrder, "id"> = {
   nombreCliente: "",
   fechaEntrega: "",
@@ -51,13 +53,30 @@ const initialOrderState: Omit<ProductionOrder, "id"> = {
 };
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<ProductionOrder[]>(mockOrders);
+  const [orders, setOrders] = useState<ProductionOrder[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<Partial<ProductionOrder> | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<ProductionOrder | null>(null);
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    const storedOrders = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (storedOrders) {
+      setOrders(JSON.parse(storedOrders));
+    } else {
+      setOrders(mockOrders);
+    }
+  }, []);
+  
+  useEffect(() => {
+    // Save to localStorage whenever orders change, except for the initial load
+    if (orders.length > 0 || (localStorage.getItem(LOCAL_STORAGE_KEY) && orders.length === 0)) {
+       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(orders));
+    }
+  }, [orders]);
+
 
   const productReferences = useMemo(() => {
     const refs = mockProducts.map(p => p.referencia);
@@ -81,7 +100,7 @@ export default function OrdersPage() {
   const isEditing = currentOrder && currentOrder.id;
 
   const handleOpenDialog = (order?: ProductionOrder) => {
-    setCurrentOrder(order ? { ...order } : { ...initialOrderState, items: [{ referencia: '', cantidad: 1 }] });
+    setCurrentOrder(order ? { ...order, items: [...order.items] } : { ...initialOrderState, items: [{ referencia: '', cantidad: 1 }] });
     setIsDialogOpen(true);
   };
   
@@ -110,7 +129,7 @@ export default function OrdersPage() {
     if (currentOrder && currentOrder.items) {
       const newItems = [...currentOrder.items];
       const updatedItem = { ...newItems[index], [field]: value };
-      newItems[index] = updatedItem;
+      newItems[index] = updatedItem as OrderItem;
       setCurrentOrder({ ...currentOrder, items: newItems });
     }
   };
@@ -127,11 +146,11 @@ export default function OrdersPage() {
     
     if (isEditing) {
       setOrders(orders.map((o) => (o.id === currentOrder.id ? (currentOrder as ProductionOrder) : o)));
-       toast({ title: "Orden Actualizada Localmente", description: `La orden ${currentOrder.id} ha sido actualizada.` });
+       toast({ title: "Orden Actualizada", description: `La orden ${currentOrder.id} ha sido actualizada.` });
     } else {
       const newOrder: ProductionOrder = { ...currentOrder, id: `ORD-${Date.now()}` } as ProductionOrder;
       setOrders([newOrder, ...orders]);
-      toast({ title: "Orden Creada Localmente", description: `La nueva orden ${newOrder.id} ha sido creada.` });
+      toast({ title: "Orden Creada", description: `La nueva orden ${newOrder.id} ha sido creada.` });
     }
     setIsDialogOpen(false);
     setCurrentOrder(null);

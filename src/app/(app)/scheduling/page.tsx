@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,9 +8,11 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { mockOrders, mockProducts } from '@/data/mock-data';
-import type { Task } from '@/lib/types';
+import { mockProducts } from '@/data/mock-data';
+import type { Task, ProductionOrder } from '@/lib/types';
 import { ArrowRight } from 'lucide-react';
+
+const ORDERS_LOCAL_STORAGE_KEY = 'productionOrders';
 
 export default function SchedulingPage() {
   const router = useRouter();
@@ -18,12 +20,20 @@ export default function SchedulingPage() {
   const [workTime, setWorkTime] = useState(480);
   const [levelingUnit, setLevelingUnit] = useState(60);
   const [selectedOrders, setSelectedOrders] = useState<Record<string, boolean>>({});
+  const [availableOrders, setAvailableOrders] = useState<ProductionOrder[]>([]);
+
+  useEffect(() => {
+    const storedOrders = localStorage.getItem(ORDERS_LOCAL_STORAGE_KEY);
+    if (storedOrders) {
+      setAvailableOrders(JSON.parse(storedOrders));
+    }
+  }, []);
 
   const tasksToSchedule: Task[] = useMemo(() => {
     const tasks: Task[] = [];
     const selectedOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
 
-    mockOrders
+    availableOrders
       .filter(order => selectedOrderIds.includes(order.id))
       .forEach(order => {
         order.items.forEach(item => {
@@ -41,7 +51,7 @@ export default function SchedulingPage() {
         });
       });
     return tasks;
-  }, [selectedOrders]);
+  }, [selectedOrders, availableOrders]);
   
   const samTotals = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -65,8 +75,6 @@ export default function SchedulingPage() {
       levelingUnit: levelingUnit,
     };
     
-    // Using localStorage to pass data to the next page. In a real app,
-    // this could be a state manager or a database entry.
     localStorage.setItem('schedulingData', JSON.stringify(schedulingData));
     router.push('/scheduling/assignment');
   };
@@ -130,7 +138,7 @@ export default function SchedulingPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {mockOrders.map(order => (
+                  {availableOrders.map(order => (
                     <TableRow key={order.id} data-state={selectedOrders[order.id] && 'selected'}>
                       <TableCell><Checkbox checked={selectedOrders[order.id] || false} onCheckedChange={(checked) => handleSelectOrder(order.id, checked)} /></TableCell>
                       <TableCell className="font-medium">{order.id}</TableCell>
