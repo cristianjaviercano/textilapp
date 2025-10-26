@@ -88,27 +88,33 @@ export default function AssignmentPage() {
       },
     }));
   };
-
-  const totals = useMemo(() => {
-    if (!data) return { operativeTotals: {}, taskTotals: {} };
-
+  
+  const summaryTotals = useMemo(() => {
+    if (!data) return { totalTasks: 0, totalUnitSam: 0, totalPackageTime: 0, operativeTotals: {} };
+    
     const operativeTotals: Record<string, number> = {};
     data.operatives.forEach(op => operativeTotals[op.id] = 0);
 
-    const taskTotals: Record<string, { assigned: number, required: number }> = {};
+    let totalUnitSam = 0;
+    let totalPackageTime = 0;
+
     data.tasks.forEach(task => {
-      taskTotals[task.id] = { assigned: 0, required: task.totalSam };
-      let currentTaskTotal = 0;
+      totalUnitSam += task.unitSam;
+      totalPackageTime += task.unitSam * data.packageSize;
       data.operatives.forEach(op => {
         const assignedSam = assignments[task.id]?.[op.id] || 0;
         operativeTotals[op.id] += assignedSam;
-        currentTaskTotal += assignedSam;
       });
-      taskTotals[task.id].assigned = currentTaskTotal;
     });
 
-    return { operativeTotals, taskTotals };
+    return { 
+      totalTasks: data.tasks.length,
+      totalUnitSam,
+      totalPackageTime,
+      operativeTotals 
+    };
   }, [data, assignments]);
+
 
   const handleAutoAssign = async () => {
     if (!data) return;
@@ -184,7 +190,7 @@ export default function AssignmentPage() {
              <Card>
                 <CardHeader>
                     <CardTitle>Prenda: {productName}</CardTitle>
-                    <CardDescription>Tamaño de paquete: {data.packageSize}</CardDescription>
+                    <CardDescription>Tamaño de paquete: {data.packageSize} | Tiempo de Nivelación: {data.levelingUnit} min</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
@@ -205,9 +211,8 @@ export default function AssignmentPage() {
                       </TableHeader>
                       <TableBody>
                         {tasksByProduct[productName].sort((a, b) => a.consecutivo - b.consecutivo).map(task => {
-                          const taskTotal = totals.taskTotals[task.id];
-                          const assigned = taskTotal?.assigned || 0;
-                          const required = taskTotal?.required || 0;
+                          const assigned = Object.values(assignments[task.id] || {}).reduce((sum, val) => sum + val, 0);
+                          const required = task.totalSam;
                           const isBalanced = Math.abs(assigned - required) < 0.01 && required > 0;
                           const timePerPackage = task.unitSam * data.packageSize;
                           return (
@@ -237,23 +242,34 @@ export default function AssignmentPage() {
                           );
                         })}
                       </TableBody>
-                      <tfoot>
+                      <TableFooter>
+                        <TableRow className="bg-secondary/70 hover:bg-secondary/70 font-bold">
+                            <TableCell colSpan={2} className="sticky left-0 bg-secondary/70 z-10">Totales</TableCell>
+                            <TableCell className="text-center">{summaryTotals.totalTasks}</TableCell>
+                            <TableCell className="text-right">{summaryTotals.totalUnitSam.toFixed(2)}</TableCell>
+                            <TableCell className="text-right">{summaryTotals.totalPackageTime.toFixed(2)}</TableCell>
+                            <TableCell colSpan={2}></TableCell>
+                            {data.operatives.map(op => {
+                                const totalMinutes = summaryTotals.operativeTotals[op.id] || 0;
+                                return (<TableCell key={op.id} className="text-right font-bold">{totalMinutes.toFixed(2)}</TableCell>)
+                            })}
+                        </TableRow>
                         <TableRow className="bg-secondary hover:bg-secondary">
-                          <th colSpan={7} className="p-2 text-right font-bold sticky left-0 bg-secondary z-10">Total Asignado (Minutos)</th>
+                          <th colSpan={7} className="p-2 text-right font-bold sticky left-0 bg-secondary z-10">Total Asignado (Nivelación)</th>
                           {data.operatives.map(op => {
-                             const totalMinutes = totals.operativeTotals[op.id] || 0;
-                             const availableMinutes = op.availableTime;
-                             const usage = availableMinutes > 0 ? (totalMinutes / availableMinutes) * 100 : 0;
-                             const isOverloaded = totalMinutes > availableMinutes;
+                             const totalMinutes = summaryTotals.operativeTotals[op.id] || 0;
+                             const levelingMinutes = data.levelingUnit;
+                             const usage = levelingMinutes > 0 ? (totalMinutes / levelingMinutes) * 100 : 0;
+                             const isOverloaded = totalMinutes > levelingMinutes;
                             return (
                                 <th key={op.id} className="p-2 text-center font-normal">
-                                    <div className={`font-bold ${isOverloaded ? 'text-red-600' : ''}`}>{totalMinutes.toFixed(2)} / {availableMinutes.toFixed(2)} min</div>
+                                    <div className={`font-bold ${isOverloaded ? 'text-red-600' : ''}`}>{totalMinutes.toFixed(2)} / {levelingMinutes.toFixed(2)} min</div>
                                     <Progress value={usage} className={`h-2 mt-1 ${isOverloaded ? '[&>div]:bg-red-500': ''}`} />
                                 </th>
                             )
                           })}
                         </TableRow>
-                      </tfoot>
+                      </TableFooter>
                     </Table>
                   </div>
                 </CardContent>
