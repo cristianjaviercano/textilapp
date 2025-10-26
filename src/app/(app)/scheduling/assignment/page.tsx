@@ -135,27 +135,54 @@ export default function AssignmentPage() {
     data.operatives.forEach(op => operativeTotals[op.id] = 0);
 
     data.tasks.forEach(task => {
-        const assignedSamForTask = Object.values(assignments[task.id] || {}).reduce((sum, val) => sum + val, 0);
-        data.operatives.forEach(op => {
-            const assignedSam = assignments[task.id]?.[op.id] || 0;
-            operativeTotals[op.id] += assignedSam;
+        Object.values(assignments[task.id] || {}).forEach((assignedSam, index) => {
+            const operativeId = data.operatives[index].id;
+            if(operativeTotals[operativeId] !== undefined) {
+                 operativeTotals[operativeId] += assignedSam;
+            }
         });
     });
 
     const totalsByProduct = Object.keys(tasksByProduct).reduce((acc, productName) => {
         const tasks = tasksByProduct[productName];
+        let totalTasks = 0;
+        let totalUnitSam = 0;
+        let totalPackageTime = 0;
+
+        tasks.forEach(task => {
+            totalTasks++;
+            totalUnitSam += task.unitSam;
+            totalPackageTime += task.unitSam * data.packageSize;
+            
+            data.operatives.forEach(op => {
+                const assignedSam = assignments[task.id]?.[op.id] || 0;
+                if(operativeTotals[op.id] !== undefined) {
+                    operativeTotals[op.id] += assignedSam;
+                } else {
+                    operativeTotals[op.id] = assignedSam;
+                }
+            });
+        });
+
         acc[productName] = {
-            totalTasks: tasks.length,
-            totalUnitSam: tasks.reduce((sum, task) => sum + task.unitSam, 0),
-            totalPackageTime: tasks.reduce((sum, task) => sum + (task.unitSam * data.packageSize), 0),
+            totalTasks,
+            totalUnitSam,
+            totalPackageTime,
         };
         return acc;
     }, {} as Record<string, {totalTasks: number, totalUnitSam: number, totalPackageTime: number}>);
+    
+    const globalTotals = {
+        totalTasks: data.tasks.length,
+        totalUnitSam: data.tasks.reduce((sum, task) => sum + task.unitSam, 0),
+        totalPackageTime: data.tasks.reduce((sum, task) => sum + (task.unitSam * data.packageSize), 0),
+    };
 
 
     return { 
       operativeTotals,
-      totalsByProduct
+      totalsByProduct,
+      globalTotals,
     };
   }, [data, assignments, tasksByProduct]);
 
