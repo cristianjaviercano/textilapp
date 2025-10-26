@@ -39,15 +39,14 @@ export default function SchedulingPage() {
         order.items.forEach(item => {
           const productOps = mockProducts.filter(p => p.referencia === item.referencia);
           productOps.forEach(op => {
-            const task: Task = {
+            tasks.push({
               id: `${order.id}-${item.referencia}-${op.id}`,
               orderId: order.id,
               productDescription: op.descripcion,
               operation: op.operacion,
               totalSam: op.sam * item.cantidad,
               unitSam: op.sam,
-            };
-            tasks.push(task);
+            });
           });
         });
       });

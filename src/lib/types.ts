@@ -29,7 +29,7 @@ export type Task = {
   productDescription: string; // prenda
   operation: string;
   totalSam: number; // samRequeridoTotal
-  unitSam: number; // SAM unitario del BOM
+  unitSam: number;
 };
 
 export type Operative = {
