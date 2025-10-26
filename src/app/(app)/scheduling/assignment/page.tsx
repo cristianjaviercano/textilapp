@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { saveOrdersData } from '../../orders/actions';
+import initialOrders from "@/data/orders.json";
 
 
 interface SchedulingData {
@@ -29,9 +30,11 @@ export default function AssignmentPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [data, setData] = useState<SchedulingData | null>(null);
+  const [orders, setOrders] = useState<ProductionOrder[]>(initialOrders);
   const [assignments, setAssignments] = useState<AssignmentData>({});
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useTransition();
 
   useEffect(() => {
     let storedData: string | null = null;
@@ -173,12 +176,12 @@ export default function AssignmentPage() {
       const unitsPerHour = data.unitsPerHour?.[task.productDescription] || 0;
       let samToDistribute = task.unitSam * unitsPerHour;
       
-      if (samToDistribute <= 0) continue;
+      if (samToDistribute <= 0.01) continue;
 
       if (!newAssignments[task.id]) {
         newAssignments[task.id] = {};
       }
-
+      
       for (const operative of data.operatives) {
         if (samToDistribute <= 0.01) break;
 
@@ -200,44 +203,48 @@ export default function AssignmentPage() {
   };
   
   const handleSaveAssignments = async () => {
-    try {
-        // This is a bit tricky as we don't have direct access to the file system
-        // on the client to read all orders. We will rely on what was passed for scheduling.
-        if (!data) throw new Error("No hay datos de programación para guardar.");
-
-        const allOrderIds = [...new Set(data.tasks.map(t => t.orderId))];
-        
-        // This is a simplification. In a real scenario, we would fetch orders from the DB.
-        // Here we assume we only need to update the orders we have tasks for.
-        const ordersWithAssignments = allOrderIds.map(orderId => {
-            const orderAssignments: AssignmentData = {};
-            for (const taskId in assignments) {
-                if (taskId.startsWith(orderId)) {
-                    orderAssignments[taskId] = assignments[taskId];
-                }
-            }
-            // This is a partial update, we would need the full order object in a real app
-            return { id: orderId, assignments: orderAssignments };
-        });
-
-        // We can't update a JSON file directly. This would need a proper API endpoint.
-        // The saveOrdersData action is simulated. For now, we save to localStorage
-        // to persist across refreshes on this page, but it won't update a central file.
-        // A more robust solution is needed for multi-user or persistent server-side storage.
-
-        toast({
-            title: "Simulación de Guardado",
-            description: "Las asignaciones se han guardado localmente (simulación).",
-        });
-
-    } catch (error) {
-        const message = error instanceof Error ? error.message : "Error desconocido";
-        toast({
-            variant: "destructive",
-            title: "Error al Guardar",
-            description: message,
-        });
+    if (!data) {
+        toast({ variant: "destructive", title: "Error", description: "No hay datos de programación para guardar." });
+        return;
     }
+
+    setIsSaving(async () => {
+        try {
+            const orderIdsInSchedule = [...new Set(data.tasks.map(t => t.orderId))];
+            
+            const updatedOrders = orders.map(order => {
+                if (orderIdsInSchedule.includes(order.id)) {
+                    const orderAssignments: AssignmentData = {};
+                    Object.keys(assignments).forEach(taskId => {
+                        const task = data.tasks.find(t => t.id === taskId);
+                        if (task && task.orderId === order.id) {
+                            orderAssignments[taskId] = assignments[taskId];
+                        }
+                    });
+                    return { ...order, assignments: orderAssignments };
+                }
+                return order;
+            });
+            
+            const result = await saveOrdersData(updatedOrders);
+
+            if (result.success) {
+                toast({
+                    title: "Asignaciones Guardadas",
+                    description: "Las asignaciones se han guardado en la base de datos de órdenes.",
+                });
+            } else {
+                throw new Error(result.error || "Error desconocido al guardar.");
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Error desconocido";
+            toast({
+                variant: "destructive",
+                title: "Error al Guardar",
+                description: message,
+            });
+        }
+    });
   };
 
 
@@ -263,8 +270,8 @@ export default function AssignmentPage() {
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
                 Asignar Automáticamente
             </Button>
-            <Button onClick={handleSaveAssignments}>
-                <Save className="mr-2 h-4 w-4" />
+            <Button onClick={handleSaveAssignments} disabled={isSaving}>
+                {isSaving ? <Loader2 className="mr-2 animate-spin" /> : <Save className="mr-2" />}
                 Guardar Asignación
             </Button>
         </div>
