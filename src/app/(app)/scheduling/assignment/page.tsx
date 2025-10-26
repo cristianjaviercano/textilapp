@@ -229,17 +229,15 @@ export default function AssignmentPage() {
                       </TableBody>
                       <tfoot>
                         <TableRow className="bg-secondary hover:bg-secondary">
-                          <th colSpan={4} className="p-2 text-right font-bold sticky left-0 bg-secondary z-10">Total Asignado (Horas)</th>
+                          <th colSpan={4} className="p-2 text-right font-bold sticky left-0 bg-secondary z-10">Total Asignado (Minutos)</th>
                           {data.operatives.map(op => {
                              const totalMinutes = totals.operativeTotals[op.id] || 0;
-                             const levelingUnit = data.levelingUnit > 0 ? data.levelingUnit : 60;
-                             const totalHours = totalMinutes / levelingUnit;
-                             const availableHours = op.availableTime / levelingUnit;
-                             const usage = availableHours > 0 ? (totalHours / availableHours) * 100 : 0;
-                             const isOverloaded = totalHours > availableHours;
+                             const availableMinutes = op.availableTime;
+                             const usage = availableMinutes > 0 ? (totalMinutes / availableMinutes) * 100 : 0;
+                             const isOverloaded = totalMinutes > availableMinutes;
                             return (
                                 <th key={op.id} className="p-2 text-center font-normal">
-                                    <div className={`font-bold ${isOverloaded ? 'text-red-600' : ''}`}>{totalHours.toFixed(2)} / {availableHours.toFixed(2)} hrs</div>
+                                    <div className={`font-bold ${isOverloaded ? 'text-red-600' : ''}`}>{totalMinutes.toFixed(2)} / {availableMinutes.toFixed(2)} min</div>
                                     <Progress value={usage} className={`h-2 mt-1 ${isOverloaded ? '[&>div]:bg-red-500': ''}`} />
                                 </th>
                             )
