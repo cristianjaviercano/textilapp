@@ -45,6 +45,7 @@ export default function SchedulingPage() {
               productDescription: op.descripcion,
               operation: op.operacion,
               totalSam: op.sam * item.cantidad,
+              unitSam: op.sam,
             };
             tasks.push(task);
           });

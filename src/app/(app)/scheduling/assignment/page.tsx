@@ -53,13 +53,13 @@ export default function AssignmentPage() {
     const operativeTotals: Record<string, number> = {};
     data.operatives.forEach(op => operativeTotals[op.id] = 0);
 
-    const taskTotals: Record<string, number> = {};
+    const taskTotals: Record<string, { assigned: number, required: number }> = {};
     data.tasks.forEach(task => {
-      taskTotals[task.id] = 0;
+      taskTotals[task.id] = { assigned: 0, required: task.totalSam };
       data.operatives.forEach(op => {
         const assignedSam = assignments[task.id]?.[op.id] || 0;
         operativeTotals[op.id] += assignedSam;
-        taskTotals[task.id] += assignedSam;
+        taskTotals[task.id].assigned += assignedSam;
       });
     });
 
@@ -134,7 +134,8 @@ export default function AssignmentPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="sticky left-0 bg-card z-10 w-[300px]">Tarea</TableHead>
-                  <TableHead className="text-right w-[120px]">SAM Requerido</TableHead>
+                  <TableHead className="text-right w-[120px]">SAM Unitario</TableHead>
+                  <TableHead className="text-right w-[120px]">SAM Total</TableHead>
                   <TableHead className="text-right w-[120px]">SAM Asignado</TableHead>
                   {data.operatives.map(op => (
                     <TableHead key={op.id} className="text-center w-[150px]">{op.id}</TableHead>
@@ -143,8 +144,9 @@ export default function AssignmentPage() {
               </TableHeader>
               <TableBody>
                 {data.tasks.map(task => {
-                  const assigned = totals.taskTotals[task.id] || 0;
-                  const required = task.totalSam;
+                  const taskTotal = totals.taskTotals[task.id];
+                  const assigned = taskTotal?.assigned || 0;
+                  const required = taskTotal?.required || 0;
                   const isBalanced = Math.abs(assigned - required) < 0.01;
                   return (
                     <TableRow key={task.id}>
@@ -152,6 +154,7 @@ export default function AssignmentPage() {
                         <div className="font-bold">{task.operation}</div>
                         <div className="text-xs text-muted-foreground">{task.orderId} / {task.productDescription}</div>
                       </TableCell>
+                      <TableCell className="text-right w-[120px]">{task.unitSam.toFixed(2)}</TableCell>
                       <TableCell className="text-right w-[120px]">{required.toFixed(2)}</TableCell>
                       <TableCell className={`text-right font-bold w-[120px] ${isBalanced ? 'text-green-600' : 'text-red-600'}`}>{assigned.toFixed(2)}</TableCell>
                       {data.operatives.map(op => (
@@ -171,7 +174,7 @@ export default function AssignmentPage() {
               </TableBody>
               <tfoot>
                 <TableRow className="bg-secondary hover:bg-secondary">
-                  <th colSpan={3} className="p-2 text-right font-bold sticky left-0 bg-secondary z-10">Total Asignado por Operario</th>
+                  <th colSpan={4} className="p-2 text-right font-bold sticky left-0 bg-secondary z-10">Total Asignado por Operario</th>
                   {data.operatives.map(op => {
                      const total = totals.operativeTotals[op.id] || 0;
                      const available = op.availableTime;
