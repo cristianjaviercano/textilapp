@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useTransition } from "react";
 import {
   Table,
   TableBody,
@@ -31,7 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { mockOrders, mockProducts } from "@/data/mock-data";
 import type { ProductionOrder, OrderItem } from "@/lib/types";
-import { PlusCircle, MoreHorizontal, Pencil, Trash2, X } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Pencil, Trash2, X, Save, Loader2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +41,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { saveOrdersData } from "./actions";
 
 const initialOrderState: Omit<ProductionOrder, "id"> = {
   nombreCliente: "",
@@ -56,6 +57,7 @@ export default function OrdersPage() {
   const [currentOrder, setCurrentOrder] = useState<Partial<ProductionOrder> | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<ProductionOrder | null>(null);
   const { toast } = useToast();
+  const [isPending, startTransition] = useTransition();
 
   const productReferences = useMemo(() => {
     const refs = mockProducts.map(p => p.referencia);
@@ -113,7 +115,7 @@ export default function OrdersPage() {
     }
   };
 
-  const handleSaveChanges = () => {
+  const handleSaveDialogChanges = () => {
     if (!currentOrder || !currentOrder.nombreCliente || !currentOrder.fechaEntrega || !currentOrder.items?.every(item => item.referencia && item.cantidad > 0)) {
         toast({
             variant: "destructive",
@@ -125,11 +127,11 @@ export default function OrdersPage() {
     
     if (isEditing) {
       setOrders(orders.map((o) => (o.id === currentOrder.id ? (currentOrder as ProductionOrder) : o)));
-       toast({ title: "Orden Actualizada", description: `La orden ${currentOrder.id} ha sido actualizada.` });
+       toast({ title: "Orden Actualizada Localmente", description: `La orden ${currentOrder.id} ha sido actualizada.` });
     } else {
       const newOrder: ProductionOrder = { ...currentOrder, id: `ORD-${Date.now()}` } as ProductionOrder;
       setOrders([newOrder, ...orders]);
-      toast({ title: "Orden Creada", description: `La nueva orden ${newOrder.id} ha sido creada.` });
+      toast({ title: "Orden Creada Localmente", description: `La nueva orden ${newOrder.id} ha sido creada.` });
     }
     setIsDialogOpen(false);
     setCurrentOrder(null);
@@ -148,6 +150,24 @@ export default function OrdersPage() {
       toast({ title: "Orden Eliminada", description: `La orden ${orderToDelete.id} ha sido eliminada.` });
     }
   };
+  
+  const handleSaveAllOrders = () => {
+    startTransition(async () => {
+      const result = await saveOrdersData(orders);
+      if (result.success) {
+        toast({
+          title: "Órdenes Guardadas",
+          description: "La base de datos de órdenes ha sido actualizada.",
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error al guardar",
+          description: result.error,
+        });
+      }
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -156,10 +176,16 @@ export default function OrdersPage() {
           <h1 className="text-3xl font-bold font-headline">Órdenes de Producción</h1>
           <p className="text-muted-foreground">Crear y gestionar órdenes de clientes.</p>
         </div>
-        <Button onClick={() => handleOpenDialog()}>
-          <PlusCircle className="mr-2" />
-          Añadir Orden
-        </Button>
+        <div className="flex gap-2">
+            <Button onClick={() => handleOpenDialog()}>
+                <PlusCircle className="mr-2" />
+                Añadir Orden
+            </Button>
+            <Button onClick={handleSaveAllOrders} disabled={isPending}>
+                {isPending ? <Loader2 className="mr-2 animate-spin" /> : <Save className="mr-2" />}
+                Guardar Órdenes
+            </Button>
+        </div>
       </div>
 
       <div className="border rounded-lg bg-card">
@@ -247,7 +273,7 @@ export default function OrdersPage() {
           </div>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSaveChanges}>Guardar Cambios</Button>
+            <Button onClick={handleSaveDialogChanges}>Guardar Cambios</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -267,5 +293,3 @@ export default function OrdersPage() {
     </div>
   );
 }
-
-    
