@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import type { Operative, Task } from '@/lib/types';
 import { runAutomatedAssignment } from '../actions';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -96,19 +96,25 @@ export default function AssignmentPage() {
     data.operatives.forEach(op => operativeTotals[op.id] = 0);
 
     let totalUnitSam = 0;
-    let totalPackageTime = 0;
+    let totalTasks = 0;
+    const timePerPackageByTask: Record<string, number> = {};
+
 
     data.tasks.forEach(task => {
+      totalTasks++;
       totalUnitSam += task.unitSam;
-      totalPackageTime += task.unitSam * data.packageSize;
+      timePerPackageByTask[task.id] = task.unitSam * data.packageSize;
       data.operatives.forEach(op => {
         const assignedSam = assignments[task.id]?.[op.id] || 0;
         operativeTotals[op.id] += assignedSam;
       });
     });
 
+    const totalPackageTime = Object.values(timePerPackageByTask).reduce((sum, val) => sum + val, 0);
+
+
     return { 
-      totalTasks: data.tasks.length,
+      totalTasks,
       totalUnitSam,
       totalPackageTime,
       operativeTotals 
@@ -122,8 +128,8 @@ export default function AssignmentPage() {
     setAiSummary(null);
 
     const input = {
-      operatives: data.operatives.map(op => ({ operativeId: op.id, tiempoDisponible: op.availableTime })),
-      tasks: data.tasks.map(task => ({ orderId: task.id, prenda: task.productDescription, operacion: task.operation, samRequeridoTotal: task.totalSam })),
+      operatives: data.operatives.map(op => ({ operativeId: op.id, tiempoDisponible: data.levelingUnit })),
+      tasks: data.tasks.map(task => ({ orderId: task.id, prenda: task.productDescription, operacion: task.operation, samRequeridoTotal: task.unitSam })),
       nivelacionUnidad: data.levelingUnit,
     };
     
