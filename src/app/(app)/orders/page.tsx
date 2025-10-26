@@ -125,6 +125,21 @@ export default function OrdersPage() {
         });
         return;
     }
+
+    if (!isEditing) {
+        const isDuplicate = orders.some(
+            (o) => o.nombreCliente === currentOrder.nombreCliente && o.fechaEntrega === currentOrder.fechaEntrega
+        );
+
+        if (isDuplicate) {
+            toast({
+                variant: "destructive",
+                title: "Orden Duplicada",
+                description: "Ya existe una orden para este cliente en la misma fecha de entrega.",
+            });
+            return;
+        }
+    }
     
     if (isEditing) {
       setOrders(orders.map((o) => (o.id === currentOrder.id ? (currentOrder as ProductionOrder) : o)));
