@@ -85,7 +85,6 @@ export default function AssignmentPage() {
     if (!data) return;
 
     let samToAssign = parseFloat(value) || 0;
-
     const task = data.tasks.find(t => t.id === taskId);
     if (!task) return;
     
@@ -96,21 +95,17 @@ export default function AssignmentPage() {
       .filter(([opId]) => opId !== operativeId)
       .reduce((sum, [, val]) => sum + val, 0);
 
-    let maxForTask = requiredSam - otherAssignmentsForTask;
-    if(samToAssign > maxForTask) {
-        samToAssign = maxForTask < 0 ? 0 : maxForTask;
+    if (otherAssignmentsForTask + samToAssign > requiredSam) {
+        samToAssign = Math.max(0, requiredSam - otherAssignmentsForTask);
         toast({ title: "Límite de Tarea Excedido", description: `El SAM asignado no puede superar el SAM requerido de ${requiredSam.toFixed(2)}.`});
     }
 
-    const otherAssignmentsForOperative = data.tasks
-      .filter(t => t.id !== taskId)
-      .reduce((sum, currentTask) => sum + (assignments[currentTask.id]?.[operativeId] || 0), 0);
+    const otherAssignmentsForOperative = Object.keys(assignments)
+      .filter(tId => tId !== taskId)
+      .reduce((sum, currentTaskId) => sum + (assignments[currentTaskId]?.[operativeId] || 0), 0);
     
-    const operativeTotal = otherAssignmentsForOperative + samToAssign;
-    const maxForOperative = data.levelingUnit;
-    
-    if (operativeTotal > maxForOperative) {
-        samToAssign = Math.max(0, maxForOperative - otherAssignmentsForOperative);
+    if (otherAssignmentsForOperative + samToAssign > data.levelingUnit) {
+        samToAssign = Math.max(0, data.levelingUnit - otherAssignmentsForOperative);
         toast({ title: "Límite de Operario Excedido", description: `La carga de ${operativeId} no puede superar los ${data.levelingUnit} min.`});
     }
 
@@ -124,52 +119,38 @@ export default function AssignmentPage() {
   };
   
   const summaryTotals = useMemo(() => {
-    if (!data) return { totalTasks: 0, totalUnitSam: 0, totalPackageTime: 0, operativeTotals: {} };
+    if (!data) return { operativeTotals: {}, totalsByProduct: {}, globalTotals: {} };
     
     const operativeTotals: Record<string, number> = {};
     data.operatives.forEach(op => operativeTotals[op.id] = 0);
 
-    Object.keys(assignments).forEach(taskId => {
-        Object.keys(assignments[taskId]).forEach(operativeId => {
-            if (operativeTotals[operativeId] !== undefined) {
-                operativeTotals[operativeId] += assignments[taskId][operativeId];
-            } else {
-                operativeTotals[operativeId] = assignments[taskId][operativeId];
-            }
+    Object.values(assignments).forEach(taskAssignments => {
+        Object.entries(taskAssignments).forEach(([operativeId, value]) => {
+            operativeTotals[operativeId] = (operativeTotals[operativeId] || 0) + value;
         });
     });
 
     const totalsByProduct = Object.keys(tasksByProduct).reduce((acc, productName) => {
         const tasks = tasksByProduct[productName];
-        let totalTasks = 0;
-        let totalUnitSam = 0;
-        let totalPackageTime = 0;
-
-        tasks.forEach(task => {
-            totalTasks++;
-            totalUnitSam += task.unitSam;
-            totalPackageTime += task.unitSam * data.packageSize;
-        });
-
+        const unitsPerHour = data.unitsPerHour?.[productName] || 0;
+        
+        let totalTasks = tasks.length;
+        let totalUnitSam = tasks.reduce((sum, task) => sum + task.unitSam, 0);
+        let totalPackageTime = tasks.reduce((sum, task) => sum + (task.unitSam * data.packageSize), 0);
+        let totalRequiredSam = tasks.reduce((sum, task) => sum + (task.unitSam * unitsPerHour), 0);
+        
         acc[productName] = {
             totalTasks,
             totalUnitSam,
             totalPackageTime,
+            totalRequiredSam
         };
         return acc;
-    }, {} as Record<string, {totalTasks: number, totalUnitSam: number, totalPackageTime: number}>);
+    }, {} as Record<string, {totalTasks: number; totalUnitSam: number; totalPackageTime: number; totalRequiredSam: number}>);
     
-    const globalTotals = {
-        totalTasks: data.tasks.length,
-        totalUnitSam: data.tasks.reduce((sum, task) => sum + task.unitSam, 0),
-        totalPackageTime: data.tasks.reduce((sum, task) => sum + (task.unitSam * data.packageSize), 0),
-    };
-
-
     return { 
       operativeTotals,
-      totalsByProduct,
-      globalTotals,
+      totalsByProduct
     };
   }, [data, assignments, tasksByProduct]);
 
@@ -181,57 +162,41 @@ export default function AssignmentPage() {
 
     const newAssignments: Record<string, Record<string, number>> = {};
     const operativeLoads: Record<string, number> = data.operatives.reduce((acc, op) => {
-        acc[op.id] = 0;
-        return acc;
+      acc[op.id] = 0;
+      return acc;
     }, {} as Record<string, number>);
 
-    let currentOperativeIndex = 0;
-    
-    // Order tasks by their original production consecutive number
     const sortedTasks = [...data.tasks].sort((a, b) => a.consecutivo - b.consecutivo);
 
     for (const task of sortedTasks) {
-        const samToAssign = task.unitSam;
-        let assigned = false;
+        const unitsPerHour = data.unitsPerHour?.[task.productDescription] || 0;
+        let samToDistribute = task.unitSam * unitsPerHour;
+        if(samToDistribute === 0) continue;
 
-        // Start searching from the current operative
-        let searchIndex = currentOperativeIndex;
-        
-        while (searchIndex < data.operatives.length && !assigned) {
-            const operative = data.operatives[searchIndex];
-            
-            if ((operativeLoads[operative.id] + samToAssign) <= data.levelingUnit) {
-                operativeLoads[operative.id] += samToAssign;
-                
-                if (!newAssignments[task.id]) {
-                    newAssignments[task.id] = {};
-                }
-                newAssignments[task.id][operative.id] = samToAssign;
-                
-                assigned = true;
-                // Important: Stay on the same operative for the next task
-                currentOperativeIndex = searchIndex; 
-            } else {
-                // If it doesn't fit, move to the next operative for the same task
-                searchIndex++;
-            }
+        if (!newAssignments[task.id]) {
+            newAssignments[task.id] = {};
         }
 
-        // If the task was assigned, we continue to the next task with the same operative index
-        // If not assigned after checking all subsequent operatives, it means there's no room.
-        // We reset the operative index to try from the start for the next task if needed, or handle unassigned tasks.
-        if (!assigned) {
-          // Task could not be assigned to any operative from the current one onwards.
-          // Optional: handle unassigned tasks, e.g., by logging or alerting.
-          console.log(`Task ${task.operation} could not be assigned.`);
+        for (const operative of data.operatives) {
+            if (samToDistribute <= 0) break;
+
+            const remainingOperativeCapacity = data.levelingUnit - (operativeLoads[operative.id] || 0);
+            if (remainingOperativeCapacity <= 0) continue;
+
+            const assignedAmount = Math.min(samToDistribute, remainingOperativeCapacity);
+
+            newAssignments[task.id][operative.id] = (newAssignments[task.id][operative.id] || 0) + assignedAmount;
+            operativeLoads[operative.id] += assignedAmount;
+            samToDistribute -= assignedAmount;
         }
     }
 
     setAssignments(newAssignments);
-    setAiSummary("Asignación automática completada con el algoritmo de nivelación secuencial.");
+    setAiSummary("Asignación automática completada distribuyendo el SAM Total Requerido.");
     setIsLoading(false);
     toast({ title: "Éxito", description: "Las tareas han sido asignadas automáticamente." });
   };
+
 
   if (isLoading || !data) {
     return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -272,7 +237,7 @@ export default function AssignmentPage() {
                 <TabsTrigger key={productName} value={productName}>{productName}</TabsTrigger>
             ))}
         </TabsList>
-        {productTabs.map(productName => (
+        {productTabs.map((productName, tabIndex) => (
           <TabsContent key={productName} value={productName}>
              <Card>
                 <CardHeader>
@@ -298,16 +263,15 @@ export default function AssignmentPage() {
                       </TableHeader>
                       <TableBody>
                         {tasksByProduct[productName]
-                         .sort((a, b) => a.consecutivo - b.consecutivo)
                          .map((task, index) => {
                           const unitsPerHour = data.unitsPerHour?.[productName] || 0;
                           const requiredSam = task.unitSam * unitsPerHour;
                           const assigned = Object.values(assignments[task.id] || {}).reduce((sum, val) => sum + val, 0);
-                          const isBalanced = Math.abs(assigned - requiredSam) < 0.01 && requiredSam > 0;
+                          const isBalanced = Math.abs(assigned - requiredSam) < 0.01 || requiredSam === 0;
                           const timePerPackage = task.unitSam * data.packageSize;
                           return (
                             <TableRow key={task.id}>
-                              <TableCell className="sticky left-0 bg-card z-10 font-medium text-center w-[60px]">{task.consecutivo}</TableCell>
+                              <TableCell className="sticky left-0 bg-card z-10 font-medium text-center w-[60px]">{index + 1}</TableCell>
                               <TableCell className="sticky left-16 bg-card z-10 font-medium w-[250px]">
                                 <div>{task.operation}</div>
                                 <div className="text-xs text-muted-foreground">{task.orderId}</div>
@@ -332,33 +296,35 @@ export default function AssignmentPage() {
                           );
                         })}
                       </TableBody>
-                      <TableFooter>
-                         <TableRow className="bg-secondary/70 hover:bg-secondary/70 font-bold">
-                            <TableCell colSpan={3} className="sticky left-0 bg-secondary/70 z-10">Totales</TableCell>
-                            <TableCell className="text-right">{summaryTotals.totalsByProduct[productName]?.totalUnitSam.toFixed(2) || '0.00'}</TableCell>
-                            <TableCell className="text-right">{summaryTotals.totalsByProduct[productName]?.totalPackageTime.toFixed(2) || '0.00'}</TableCell>
-                            <TableCell colSpan={2}></TableCell>
+                        <TableFooter>
+                           <TableRow className="bg-secondary/70 hover:bg-secondary/70 font-bold">
+                              <TableCell colSpan={2} className="sticky left-0 bg-secondary/70 z-10">Totales</TableCell>
+                              <TableCell className="text-center">{summaryTotals.totalsByProduct[productName]?.totalTasks || 0}</TableCell>
+                              <TableCell className="text-right">{summaryTotals.totalsByProduct[productName]?.totalUnitSam.toFixed(2) || '0.00'}</TableCell>
+                              <TableCell className="text-right">{summaryTotals.totalsByProduct[productName]?.totalPackageTime.toFixed(2) || '0.00'}</TableCell>
+                              <TableCell className="text-right">{summaryTotals.totalsByProduct[productName]?.totalRequiredSam.toFixed(2) || '0.00'}</TableCell>
+                              <TableCell></TableCell>
+                              {data.operatives.map(op => {
+                                  const totalMinutes = summaryTotals.operativeTotals[op.id] || 0;
+                                  return (<TableCell key={op.id} className="text-right font-bold">{totalMinutes.toFixed(2)}</TableCell>)
+                              })}
+                          </TableRow>
+                          <TableRow className="bg-secondary hover:bg-secondary">
+                            <th colSpan={7} className="p-2 text-right font-bold sticky left-0 bg-secondary z-10">Total Asignado (Nivelación)</th>
                             {data.operatives.map(op => {
-                                const totalMinutes = summaryTotals.operativeTotals[op.id] || 0;
-                                return (<TableCell key={op.id} className="text-right font-bold">{totalMinutes.toFixed(2)}</TableCell>)
+                               const totalMinutes = summaryTotals.operativeTotals[op.id] || 0;
+                               const levelingMinutes = data.levelingUnit;
+                               const usage = levelingMinutes > 0 ? (totalMinutes / levelingMinutes) * 100 : 0;
+                               const isOverloaded = totalMinutes > levelingMinutes;
+                              return (
+                                  <th key={op.id} className="p-2 text-center font-normal">
+                                      <div className={`font-bold ${isOverloaded ? 'text-red-600' : ''}`}>{totalMinutes.toFixed(2)} / {levelingMinutes.toFixed(2)} min</div>
+                                      <Progress value={usage} className={`h-2 mt-1 ${isOverloaded ? '[&>div]:bg-red-500': ''}`} />
+                                  </th>
+                              )
                             })}
-                        </TableRow>
-                        <TableRow className="bg-secondary hover:bg-secondary">
-                          <th colSpan={7} className="p-2 text-right font-bold sticky left-0 bg-secondary z-10">Total Asignado (Nivelación)</th>
-                          {data.operatives.map(op => {
-                             const totalMinutes = summaryTotals.operativeTotals[op.id] || 0;
-                             const levelingMinutes = data.levelingUnit;
-                             const usage = levelingMinutes > 0 ? (totalMinutes / levelingMinutes) * 100 : 0;
-                             const isOverloaded = totalMinutes > levelingMinutes;
-                            return (
-                                <th key={op.id} className="p-2 text-center font-normal">
-                                    <div className={`font-bold ${isOverloaded ? 'text-red-600' : ''}`}>{totalMinutes.toFixed(2)} / {levelingMinutes.toFixed(2)} min</div>
-                                    <Progress value={usage} className={`h-2 mt-1 ${isOverloaded ? '[&>div]:bg-red-500': ''}`} />
-                                </th>
-                            )
-                          })}
-                        </TableRow>
-                      </TableFooter>
+                          </TableRow>
+                        </TableFooter>
                     </Table>
                   </div>
                 </CardContent>
