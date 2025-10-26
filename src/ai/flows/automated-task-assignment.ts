@@ -62,17 +62,22 @@ const prompt = ai.definePrompt({
   name: 'automatedTaskAssignmentPrompt',
   input: {schema: AutomatedTaskAssignmentInputSchema},
   output: {schema: AutomatedTaskAssignmentOutputSchema},
-  prompt: `You are an expert industrial engineer specializing in optimizing workload distribution in textile manufacturing. Your goal is to assign tasks to operatives using a heuristic approach to balance the workload.
+  prompt: `You are an expert industrial engineer specializing in optimizing workload distribution in textile manufacturing. Your goal is to assign tasks to operatives using a sequential heuristic approach to balance the workload.
 
-Follow this specific logic:
-1.  Go through the tasks one by one.
-2.  For each task, start with the first operative that has available time.
-3.  If the operative has enough available time to complete the entire task, assign the full SAM of the task to them and update their available time.
-4.  If the operative does not have enough time, assign only the remaining available time of that operative to the task.
-5.  The remaining SAM for that task must then be assigned to the next available operative. Continue this process, splitting the task across multiple operatives if necessary, until the entire SAM for the task is assigned.
-6.  Proceed to the next task and repeat the process.
+Follow this specific logic meticulously:
+1.  Initialize the workload for all operatives to zero. Start with the first operative.
+2.  Iterate through each task one by one.
+3.  For each task, determine its total required SAM ('samRequeridoTotal').
+4.  You will attempt to assign the remaining SAM of the current task to the current operative.
+5.  Check the current operative's remaining available time ('tiempoDisponible' - their current workload).
+6.  The amount of time to assign in this step is the *minimum* of either the task's remaining SAM or the operative's remaining available time.
+7.  Add this assigned time to the operative's workload and record it as a partial or full assignment for that task.
+8.  Subtract the assigned time from the task's remaining SAM.
+9.  If the task still has SAM left to be assigned (meaning the operative's time was filled before the task was completed), you MUST move to the *next* operative and repeat steps 5-8 for the *same* task.
+10. If the task has no SAM remaining, move to the *next* task and start again from the current operative (or the next one if the current one is now full).
+11. An operative is considered "full" when their workload is equal to their 'tiempoDisponible'. If an operative becomes full, immediately move to the next operative.
 
-The objective is to fill each operative's time before moving to the next, splitting tasks as required.
+The objective is to fill each operative's available time sequentially, splitting tasks across operatives only when necessary.
 
 Operatives:
 {{#each operatives}}
@@ -84,12 +89,12 @@ Tasks:
 - Task ID (orderId): {{orderId}}, Garment: {{prenda}}, Operation: {{operacion}}, SAM Required: {{samRequeridoTotal}} minutes
 {{/each}}
 
-Unit of Leveling: {{nivelacionUnidad}} minutes (This is for context, the main constraint is 'tiempoDisponible'. The goal is to fill the available time).
+Unit of Leveling: {{nivelacionUnidad}} minutes (This is for context; the primary constraint is 'tiempoDisponible'. The goal is to fill the available time).
 
 Output Format:
 Provide a JSON object with "assignments" and a "summary".
-For "assignments", create an array where each entry represents a full or partial assignment of a task to an operative.
-For "summary", provide a clear and concise summary of the assignment process, including the rationale behind your suggestions, a warning if more operatives are needed, or a note if some operatives were not assigned any work.
+- For "assignments", create an array. Each entry must represent a full or partial assignment of a task to an operative, containing 'operativeId', 'taskId', and 'samAsignado'.
+- For "summary", provide a clear and concise summary of the assignment process. Explicitly mention if more operatives are needed to complete the work, or if some operatives were not assigned any work and could be removed.
 `,
 });
 
