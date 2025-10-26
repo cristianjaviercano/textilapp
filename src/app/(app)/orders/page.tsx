@@ -64,11 +64,15 @@ export default function OrdersPage() {
 
   const flattenedOrders = useMemo(() => {
     return orders.flatMap(order => 
-      order.items.map(item => ({
-        ...order,
-        ...item,
-        orderId: order.id
-      }))
+      order.items.map(item => {
+        const product = mockProducts.find(p => p.referencia === item.referencia);
+        return {
+          ...order,
+          ...item,
+          orderId: order.id,
+          descripcion: product ? product.descripcion : 'N/A',
+        };
+      })
     );
   }, [orders]);
 
@@ -165,6 +169,7 @@ export default function OrdersPage() {
               <TableHead>ID Orden</TableHead>
               <TableHead>Cliente</TableHead>
               <TableHead>Referencia</TableHead>
+              <TableHead>Descripción</TableHead>
               <TableHead className="text-right">Cantidad</TableHead>
               <TableHead>Fecha Entrega</TableHead>
               <TableHead>Prioridad</TableHead>
@@ -177,6 +182,7 @@ export default function OrdersPage() {
                 <TableCell className="font-medium">{item.orderId}</TableCell>
                 <TableCell>{item.nombreCliente}</TableCell>
                 <TableCell>{item.referencia}</TableCell>
+                <TableCell>{item.descripcion}</TableCell>
                 <TableCell className="text-right">{item.cantidad}</TableCell>
                 <TableCell>{item.fechaEntrega}</TableCell>
                 <TableCell><Badge variant={item.prioridad === 1 ? "destructive" : "secondary"}>{item.prioridad}</Badge></TableCell>
@@ -261,3 +267,5 @@ export default function OrdersPage() {
     </div>
   );
 }
+
+    
