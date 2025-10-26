@@ -83,12 +83,47 @@ export default function AssignmentPage() {
   }, [data]);
 
   const handleAssignmentChange = (taskId: string, operativeId: string, value: string) => {
-    const sam = parseFloat(value) || 0;
+    if (!data) return;
+
+    let samToAssign = parseFloat(value) || 0;
+
+    const task = data.tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const unitsPerHour = data.unitsPerHour?.[task.productDescription] || 0;
+    const requiredSam = task.unitSam * unitsPerHour;
+    
+    // --- VALIDATION LOGIC ---
+
+    // Rule 1: Cannot be greater than SAM total Req for the activity
+    const otherAssignmentsForTask = Object.entries(assignments[taskId] || {})
+      .filter(([opId]) => opId !== operativeId)
+      .reduce((sum, [, val]) => sum + val, 0);
+
+    let maxForTask = requiredSam - otherAssignmentsForTask;
+    if(samToAssign > maxForTask) {
+        samToAssign = maxForTask < 0 ? 0 : maxForTask;
+        toast({ title: "Límite de Tarea Excedido", description: `El SAM asignado no puede superar el SAM requerido de ${requiredSam.toFixed(2)}.`});
+    }
+
+    // Rule 2: Cumulative value for an operative cannot exceed levelingUnit
+    const otherAssignmentsForOperative = data.tasks
+      .filter(t => t.id !== taskId)
+      .reduce((sum, currentTask) => sum + (assignments[currentTask.id]?.[operativeId] || 0), 0);
+
+    const operativeTotal = otherAssignmentsForOperative;
+    const maxForOperative = data.levelingUnit - operativeTotal;
+    
+    if (samToAssign > maxForOperative) {
+        samToAssign = maxForOperative < 0 ? 0 : maxForOperative;
+        toast({ title: "Límite de Operario Excedido", description: `La carga de ${operativeId} no puede superar los ${data.levelingUnit} min.`});
+    }
+
     setAssignments(prev => ({
       ...prev,
       [taskId]: {
         ...prev[taskId],
-        [operativeId]: sam,
+        [operativeId]: samToAssign,
       },
     }));
   };
@@ -99,28 +134,30 @@ export default function AssignmentPage() {
     const operativeTotals: Record<string, number> = {};
     data.operatives.forEach(op => operativeTotals[op.id] = 0);
 
-    let totalUnitSam = 0;
-    let totalTasks = 0;
-    let totalPackageTime = 0;
-
-
     data.tasks.forEach(task => {
-      totalTasks++;
-      totalUnitSam += task.unitSam;
-      totalPackageTime += task.unitSam * data.packageSize;
-      data.operatives.forEach(op => {
-        const assignedSam = assignments[task.id]?.[op.id] || 0;
-        operativeTotals[op.id] += assignedSam;
-      });
+        const assignedSamForTask = Object.values(assignments[task.id] || {}).reduce((sum, val) => sum + val, 0);
+        data.operatives.forEach(op => {
+            const assignedSam = assignments[task.id]?.[op.id] || 0;
+            operativeTotals[op.id] += assignedSam;
+        });
     });
 
+    const totalsByProduct = Object.keys(tasksByProduct).reduce((acc, productName) => {
+        const tasks = tasksByProduct[productName];
+        acc[productName] = {
+            totalTasks: tasks.length,
+            totalUnitSam: tasks.reduce((sum, task) => sum + task.unitSam, 0),
+            totalPackageTime: tasks.reduce((sum, task) => sum + (task.unitSam * data.packageSize), 0),
+        };
+        return acc;
+    }, {} as Record<string, {totalTasks: number, totalUnitSam: number, totalPackageTime: number}>);
+
+
     return { 
-      totalTasks,
-      totalUnitSam,
-      totalPackageTime,
-      operativeTotals 
+      operativeTotals,
+      totalsByProduct
     };
-  }, [data, assignments]);
+  }, [data, assignments, tasksByProduct]);
 
 
   const handleAutoAssign = async () => {
@@ -251,10 +288,11 @@ export default function AssignmentPage() {
                         })}
                       </TableBody>
                       <TableFooter>
-                        <TableRow className="bg-secondary/70 hover:bg-secondary/70 font-bold">
-                            <TableCell colSpan={3} className="sticky left-0 bg-secondary/70 z-10">Totales</TableCell>
-                            <TableCell className="text-right">{tasksByProduct[productName].reduce((sum, task) => sum + task.unitSam, 0).toFixed(2)}</TableCell>
-                            <TableCell className="text-right">{tasksByProduct[productName].reduce((sum, task) => sum + (task.unitSam * data.packageSize), 0).toFixed(2)}</TableCell>
+                         <TableRow className="bg-secondary/70 hover:bg-secondary/70 font-bold">
+                            <TableCell colSpan={2} className="sticky left-0 bg-secondary/70 z-10">Totales</TableCell>
+                            <TableCell className="text-center">{summaryTotals.totalsByProduct[productName]?.totalTasks || 0}</TableCell>
+                            <TableCell className="text-right">{summaryTotals.totalsByProduct[productName]?.totalUnitSam.toFixed(2) || '0.00'}</TableCell>
+                            <TableCell className="text-right">{summaryTotals.totalsByProduct[productName]?.totalPackageTime.toFixed(2) || '0.00'}</TableCell>
                             <TableCell colSpan={2}></TableCell>
                             {data.operatives.map(op => {
                                 const totalMinutes = summaryTotals.operativeTotals[op.id] || 0;
@@ -287,3 +325,5 @@ export default function AssignmentPage() {
     </div>
   );
 }
+
+    
