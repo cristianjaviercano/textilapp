@@ -1,1 +1,31 @@
-[]
+
+[
+  {
+    "nombreCliente": "cliente2",
+    "fechaEntrega": "2025-10-28",
+    "prioridad": 4,
+    "items": [
+      {
+        "referencia": "16534",
+        "cantidad": 400
+      },
+      {
+        "referencia": "18673",
+        "cantidad": 350
+      }
+    ],
+    "id": "ORD-1761522147996"
+  },
+  {
+    "nombreCliente": "cliente1",
+    "fechaEntrega": "2025-10-27",
+    "prioridad": 4,
+    "items": [
+      {
+        "referencia": "14921",
+        "cantidad": 200
+      }
+    ],
+    "id": "ORD-1761522119081"
+  }
+]
