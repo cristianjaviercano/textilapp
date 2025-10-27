@@ -8,9 +8,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
-  Label,
 } from 'recharts';
 import {
   Card,
@@ -26,7 +24,7 @@ import {
   ChartLegendContent
 } from '@/components/ui/chart';
 import { Button } from '@/components/ui/button';
-import { Download, ChevronDown } from 'lucide-react';
+import { Download, ChevronDown, CheckCircle, AlertTriangle, Clock } from 'lucide-react';
 import { ChartConfig } from '@/components/ui/chart';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -34,6 +32,8 @@ import initialOrders from "@/data/orders.json";
 import { mockProducts } from '@/data/mock-data';
 import type { ProductionOrder } from "@/lib/types";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { addDays, format, parseISO } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const generateColorFromString = (str: string) => {
     let hash = 0;
@@ -54,27 +54,33 @@ export default function ReportsPage() {
     const { kpis, barChartData, chartConfig, operativeSummary, allOperations } = useMemo(() => {
         const activeOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
         if (activeOrderIds.length === 0) {
-            return { kpis: { makespan: 0, utilization: 0, efficiency: 0, unitsPerHour: 0 }, barChartData: [], chartConfig: {}, operativeSummary: [], allOperations: [] };
+            const defaultKpis = {
+              makespan: 0,
+              personnelUtilization: 0,
+              unitsPerHour: 0,
+              deliveryStatus: { status: 'N/A', diffDays: 0, estimatedDate: '', targetDate: '' },
+            };
+            return { kpis: defaultKpis, barChartData: [], chartConfig: {}, operativeSummary: [], allOperations: [] };
         }
 
         const relevantOrders = orders.filter(o => activeOrderIds.includes(o.id));
         
         const operativeTasks: Record<string, {taskId: string, assignedTime: number, operationName: string, unitSam: number, maquina: string}[]> = {};
         const operationsSet = new Set<string>();
-        let totalAssignedSam = 0;
-        let totalRequiredSam = 0;
+        let totalMakespan = 0; // Sum of all required SAM
         let totalUnits = 0;
-        let totalLevelingTime = 0;
+        let operativesWithAssignments = new Set<string>();
 
         relevantOrders.forEach(order => {
             if (order.assignments) {
                  Object.entries(order.assignments).forEach(([taskId, taskAssignments]) => {
-                    const productOp = mockProducts.find(p => taskId.endsWith(p.id));
+                    const productOp = mockProducts.find(p => taskId.includes(p.id)); // Loosened the check to be more robust
                     if (!productOp) return;
                     const operationName = productOp.operacion;
                     operationsSet.add(operationName);
 
                     Object.entries(taskAssignments).forEach(([opId, assignedTime]) => {
+                        operativesWithAssignments.add(opId);
                         if (!operativeTasks[opId]) {
                           operativeTasks[opId] = [];
                         }
@@ -85,29 +91,48 @@ export default function ReportsPage() {
                           unitSam: productOp.sam,
                           maquina: productOp.maquina
                         });
-                        totalAssignedSam += assignedTime;
                     });
                 });
             }
              if (order.stats) {
                 order.stats.forEach(stat => {
-                    totalRequiredSam += stat.totalSam * stat.loteSize;
+                    totalMakespan += stat.totalSam * stat.loteSize;
                     totalUnits += stat.loteSize;
                 });
             }
         });
         
-        const allOperatives = Object.keys(operativeTasks).sort();
-        const numOperatives = allOperatives.length;
-
-        if(numOperatives > 0) {
-            const firstOrderWithStats = relevantOrders.find(o => o.stats && o.stats.length > 0);
-            if (firstOrderWithStats?.stats && firstOrderWithStats.stats.length > 0) {
-                 const levelingUnit = 60; 
-                 totalLevelingTime = numOperatives * levelingUnit;
-            }
-        }
+        const allOperativesWithTasks = Array.from(operativesWithAssignments).sort();
+        const numOperatives = 8; // Assuming 8 operatives as per scheduling page
+        const personnelUtilization = numOperatives > 0 ? (allOperativesWithTasks.length / numOperatives) * 100 : 0;
         
+        const totalHours = totalMakespan > 0 ? totalMakespan / 60 : 0;
+        const unitsPerHour = totalHours > 0 ? totalUnits / totalHours : 0;
+        
+        const deliveryDates = relevantOrders.map(o => parseISO(o.fechaEntrega)).sort((a,b) => b.getTime() - a.getTime());
+        const latestDeliveryDate = deliveryDates[0];
+        
+        const productionDays = totalHours / 8; // 8-hour workday
+        const estimatedEndDate = addDays(new Date(), Math.ceil(productionDays));
+
+        let deliveryStatus = { status: 'N/A', diffDays: 0, estimatedDate: '', targetDate: '' };
+        if(latestDeliveryDate) {
+            const diffTime = estimatedEndDate.getTime() - latestDeliveryDate.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            let status = '';
+            if (diffDays <= 0) status = 'A tiempo';
+            else if (diffDays > 0) status = 'Retrasado';
+
+            deliveryStatus = {
+                status,
+                diffDays: Math.abs(diffDays),
+                estimatedDate: format(estimatedEndDate, 'PPP', {locale: es}),
+                targetDate: format(latestDeliveryDate, 'PPP', {locale: es}),
+            };
+        }
+
+
         const newChartConfig = Array.from(operationsSet).reduce((acc, opName) => {
             acc[opName] = {
                 label: opName,
@@ -117,32 +142,25 @@ export default function ReportsPage() {
         }, {} as ChartConfig);
 
         const operativeLoadByName: Record<string, Record<string, number>> = {};
-        allOperatives.forEach(opId => {
+        allOperativesWithTasks.forEach(opId => {
             operativeLoadByName[opId] = { name: opId };
             operationsSet.forEach(opName => {
                 operativeLoadByName[opId][opName] = 0;
             });
-            operativeTasks[opId].forEach(task => {
-                operativeLoadByName[opId][task.operationName] += task.assignedTime;
+            operativeTasks[opId]?.forEach(task => {
+                operativeLoadByName[opId][task.operationName] = (operativeLoadByName[opId][task.operationName] || 0) + task.assignedTime;
             });
         });
         const barChartData = Object.values(operativeLoadByName);
 
         const operativeTotalTimes: Record<string, number> = {};
-        allOperatives.forEach(opId => {
+        allOperativesWithTasks.forEach(opId => {
             operativeTotalTimes[opId] = (operativeTasks[opId] || []).reduce((sum, task) => sum + task.assignedTime, 0);
         });
         
-        const makespan = Math.max(0, ...Object.values(operativeTotalTimes));
-        const utilization = totalLevelingTime > 0 ? (totalAssignedSam / totalLevelingTime) * 100 : 0;
-        const efficiency = totalRequiredSam > 0 && totalAssignedSam > 0 ? (totalRequiredSam / totalAssignedSam) * 100 : 0;
-        
-        const totalHours = makespan > 0 ? makespan / 60 : 1;
-        const unitsPerHour = totalHours > 0 ? totalUnits / totalHours : 0;
-
         const allOperations = Array.from(operationsSet);
         
-        const newOperativeSummary = allOperatives.map(opId => {
+        const newOperativeSummary = allOperativesWithTasks.map(opId => {
             const totalMinutes = operativeTotalTimes[opId] || 0;
             return {
                 operative: opId,
@@ -153,10 +171,10 @@ export default function ReportsPage() {
 
         return {
             kpis: {
-                makespan,
-                utilization,
-                efficiency,
-                unitsPerHour
+                makespan: totalMakespan,
+                personnelUtilization,
+                unitsPerHour,
+                deliveryStatus,
             },
             barChartData,
             chartConfig: newChartConfig,
@@ -217,38 +235,49 @@ export default function ReportsPage() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Makespan (Tiempo de Ciclo)</CardTitle>
+                        <CardTitle className="text-sm font-medium">Makespan (Tiempo Total)</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{kpis.makespan.toFixed(2)} min</div>
-                        <p className="text-xs text-muted-foreground">Tiempo máx. por operario</p>
+                        <p className="text-xs text-muted-foreground">Tiempo total de trabajo para la orden</p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Utilización General</CardTitle>
+                        <CardTitle className="text-sm font-medium">Utilización de Personal</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{kpis.utilization.toFixed(2)}%</div>
-                        <p className="text-xs text-muted-foreground">Basado en el tiempo de nivelación</p>
+                        <div className="text-2xl font-bold">{kpis.personnelUtilization.toFixed(2)}%</div>
+                        <p className="text-xs text-muted-foreground">Del total de operarios disponibles</p>
                     </CardContent>
                 </Card>
-                <Card>
+                 <Card className={
+                    kpis.deliveryStatus.status === 'A tiempo' ? 'bg-green-50 border-green-200' :
+                    kpis.deliveryStatus.status === 'Retrasado' ? 'bg-red-50 border-red-200' : ''
+                }>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Eficiencia General</CardTitle>
+                        <CardTitle className="text-sm font-medium">Cumplimiento de Entrega</CardTitle>
+                         {kpis.deliveryStatus.status === 'A tiempo' && <CheckCircle className="h-4 w-4 text-green-600" />}
+                         {kpis.deliveryStatus.status === 'Retrasado' && <AlertTriangle className="h-4 w-4 text-red-600" />}
+                         {kpis.deliveryStatus.status === 'Adelantado' && <Clock className="h-4 w-4 text-blue-600" />}
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{kpis.efficiency.toFixed(2)}%</div>
-                        <p className="text-xs text-muted-foreground">SAM requerido vs. SAM asignado</p>
+                        <div className={`text-2xl font-bold ${
+                            kpis.deliveryStatus.status === 'A tiempo' ? 'text-green-700' :
+                            kpis.deliveryStatus.status === 'Retrasado' ? 'text-red-700' : ''
+                        }`}>{kpis.deliveryStatus.status}</div>
+                         <p className="text-xs text-muted-foreground">
+                            Fin est.: {kpis.deliveryStatus.estimatedDate} vs Entrega: {kpis.deliveryStatus.targetDate}
+                        </p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Unidades / Hora (Est.)</CardTitle>
+                        <CardTitle className="text-sm font-medium">Unidades / Hora (UPH)</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{kpis.unitsPerHour.toFixed(2)}</div>
-                        <p className="text-xs text-muted-foreground">Producción estimada con la carga actual</p>
+                        <p className="text-xs text-muted-foreground">Producción estimada por hora</p>
                     </CardContent>
                 </Card>
             </div>
@@ -317,8 +346,8 @@ export default function ReportsPage() {
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
-                                                {op.tasks.map(task => (
-                                                    <TableRow key={task.taskId}>
+                                                {op.tasks.map((task, index) => (
+                                                    <TableRow key={`${task.taskId}-${index}`}>
                                                         <TableCell>{task.operationName}</TableCell>
                                                         <TableCell>{task.maquina}</TableCell>
                                                         <TableCell className="text-right">{task.assignedTime.toFixed(2)}</TableCell>
