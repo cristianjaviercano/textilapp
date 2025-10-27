@@ -32,7 +32,7 @@ import { type ChartConfig } from '@/components/ui/chart';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import initialOrders from "@/data/orders.json";
-import { mockProducts } from '@/data/mock-data';
+import { mockProducts } from "@/data/mock-data";
 import type { ProductionOrder } from "@/lib/types";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { addDays, format, parseISO, differenceInDays } from 'date-fns';
@@ -53,9 +53,9 @@ const generateColorFromString = (str: string) => {
 
 
 // Componente para el encabezado del PDF por operario
-const PdfOperativeHeader = ({ orderSummary, kpis }: { orderSummary: any, kpis: any }) => (
+const PdfOperativeHeader = ({ orderSummary, opId }: { orderSummary: any, opId: string }) => (
     <div className="p-8 pb-4 bg-white">
-        <h1 className="text-2xl font-bold font-headline mb-4">Hoja de Trabajo de Operario</h1>
+        <h1 className="text-2xl font-bold font-headline mb-4">Hoja de Trabajo de Operario: {opId}</h1>
         <Card>
             <CardHeader><CardTitle className="text-lg">Información de la Orden</CardTitle></CardHeader>
             <CardContent className="text-sm">
@@ -64,7 +64,7 @@ const PdfOperativeHeader = ({ orderSummary, kpis }: { orderSummary: any, kpis: a
                     <p><strong>Nº Orden(es):</strong> {orderSummary.orderIds.join(', ')}</p>
                     <p><strong>Tamaño Lote Total:</strong> {orderSummary.totalLoteSize} unidades</p>
                     <p><strong>Producto(s):</strong> {orderSummary.products.map((p: any) => `${p.name} (${p.qty})`).join(', ')}</p>
-                    <p><strong>Fecha de Entrega:</strong> {kpis.deliveryStatus.targetDate}</p>
+                    <p><strong>Fecha de Entrega:</strong> {orderSummary.deliveryDate}</p>
                  </div>
             </CardContent>
         </Card>
@@ -218,7 +218,7 @@ export default function ReportsPage() {
             return {
               kpis: { makespan: 0, personnelUtilization: 0, unitsPerDay: 0, deliveryStatus: { status: 'N/A', diffDays: 0, estimatedDate: '', targetDate: '' }},
               ganttChartData: [], ganttChartConfig: {}, ganttDomain: [0, 60], activityLoadData: [], operativeSummary: [],
-              orderSummary: { clients: [], orderIds: [], products: [], totalLoteSize: 0, timeByActivity: [], timeByMachine: [] },
+              orderSummary: { clients: [], orderIds: [], products: [], totalLoteSize: 0, timeByActivity: [], timeByMachine: [], deliveryDate: '' },
               allOperativesWithTasks: [],
               operativeYMap: new Map()
             };
@@ -325,8 +325,8 @@ export default function ReportsPage() {
             }
         });
         
-        const calculatedMakespan = Object.values(operativeTasks).flat().reduce((sum, task) => sum + task.assignedTime, 0);
-        const ganttDomain = [0, maxTime > 0 ? maxTime * 1.05 : 60];
+        const calculatedMakespan = maxTime;
+        const ganttDomain = [0, calculatedMakespan > 0 ? calculatedMakespan * 1.05 : 60];
         
         const deliveryDates = relevantOrders.map(o => parseISO(o.fechaEntrega)).sort((a,b) => b.getTime() - a.getTime());
         const latestDeliveryDate = deliveryDates[0];
@@ -363,7 +363,8 @@ export default function ReportsPage() {
              products: Array.from(products.entries()).map(([name, qty]) => ({name, qty})),
              totalLoteSize,
              timeByActivity: Object.entries(timeByActivity).map(([name, time]) => ({name, time})).sort((a,b)=> b.time - a.time),
-             timeByMachine: Object.entries(timeByMachine).map(([name, time]) => ({name, time})).sort((a,b)=> b.time - a.time)
+             timeByMachine: Object.entries(timeByMachine).map(([name, time]) => ({name, time})).sort((a,b)=> b.time - a.time),
+             deliveryDate: deliveryStatus.targetDate,
         }
         
         return {
@@ -442,7 +443,7 @@ export default function ReportsPage() {
                 root.render(
                     <React.StrictMode>
                         <div className="bg-white text-black">
-                           <PdfOperativeHeader kpis={kpis} orderSummary={orderSummary} />
+                           <PdfOperativeHeader orderSummary={orderSummary} opId={opId} />
                            <PdfOperativeDetail opId={opId} tasks={operativeTasks} />
                         </div>
                     </React.StrictMode>
