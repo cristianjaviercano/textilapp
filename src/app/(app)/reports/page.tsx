@@ -188,11 +188,12 @@ export default function ReportsPage() {
             }
         });
         
+        const calculatedMakespan = totalMakespan;
         const ganttDomain = [0, maxTime > 0 ? maxTime * 1.05 : 60];
         
         const deliveryDates = relevantOrders.map(o => parseISO(o.fechaEntrega)).sort((a,b) => b.getTime() - a.getTime());
         const latestDeliveryDate = deliveryDates[0];
-        const productionDays = totalMakespan > 0 ? (totalMakespan / 60) / 8 : 0; // 8-hour workday
+        const productionDays = calculatedMakespan > 0 ? (calculatedMakespan / 60) / 8 : 0; // 8-hour workday
         let deliveryStatus = { status: 'N/A', diffDays: 0, estimatedDate: '', targetDate: '' };
 
         if(latestDeliveryDate) {
@@ -229,7 +230,7 @@ export default function ReportsPage() {
         }
         
         return {
-            kpis: { makespan: totalMakespan, personnelUtilization, unitsPerDay, deliveryStatus },
+            kpis: { makespan: calculatedMakespan, personnelUtilization, unitsPerDay, deliveryStatus },
             ganttChartData: ganttData,
             ganttChartConfig: newGanttConfig,
             ganttDomain,
@@ -247,29 +248,79 @@ export default function ReportsPage() {
         return entry ? entry[0] : '';
     };
 
-    const handleExportPdf = () => {
-        const input = reportRef.current;
-        if (!input) return;
-        
+    const handleExportPdf = async () => {
+        const mainReportElement = reportRef.current;
+        if (!mainReportElement) return;
+
         setIsGeneratingPdf(true);
 
-        html2canvas(input, {
-          scale: 2, // Aumentar la escala para mejorar la calidad
-          useCORS: true, 
-        }).then(canvas => {
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF({
-                orientation: 'p',
-                unit: 'px',
-                format: [canvas.width, canvas.height]
-            });
-            pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-            pdf.save('reporte-produccion.pdf');
-            setIsGeneratingPdf(false);
-        }).catch(() => {
-            setIsGeneratingPdf(false);
+        // --- Create a clone of the report element to manipulate for PDF generation ---
+        const clone = mainReportElement.cloneNode(true) as HTMLElement;
+        clone.style.position = 'absolute';
+        clone.style.left = '-9999px'; // Move it off-screen
+        clone.style.width = '800px'; // A fixed width for consistent layout
+        clone.style.top = '0';
+        document.body.appendChild(clone);
+
+        // --- Find and expand all accordion items in the clone ---
+        const accordionTriggers = clone.querySelectorAll('[data-radix-collection-item][data-state="closed"]');
+        accordionTriggers.forEach(trigger => {
+            const correspondingContent = trigger.nextElementSibling as HTMLElement | null;
+            if (correspondingContent) {
+                correspondingContent.style.display = 'block'; // Force display
+                correspondingContent.setAttribute('data-state', 'open');
+            }
         });
+        
+        // Give a moment for styles to apply
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        const pdf = new jsPDF('p', 'pt', 'letter');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const margin = 40;
+        const availableWidth = pdfWidth - margin * 2;
+
+        try {
+            // --- Part 1: General Report (KPIs, Charts, Order Summary) ---
+            const generalInfoElement = clone.querySelector('#pdf-general-report') as HTMLElement;
+            if (generalInfoElement) {
+                const canvas = await html2canvas(generalInfoElement, { scale: 2, useCORS: true });
+                const imgData = canvas.toDataURL('image/png');
+                const imgHeight = (canvas.height * availableWidth) / canvas.width;
+                pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, imgHeight);
+            }
+
+            // --- Part 2: Operative Details (Each on new pages if necessary) ---
+            const operativeAccordionElement = clone.querySelector('#pdf-operative-summary') as HTMLElement;
+            if (operativeAccordionElement) {
+                const operativeItems = operativeAccordionElement.querySelectorAll<HTMLElement>('.pdf-operative-item');
+                for (const item of Array.from(operativeItems)) {
+                    pdf.addPage();
+                    const canvas = await html2canvas(item, { scale: 2, useCORS: true });
+                    const imgData = canvas.toDataURL('image/png');
+                    const imgHeight = (canvas.height * availableWidth) / canvas.width;
+                    
+                    // Check if it fits, though we are adding a new page for each anyway
+                    if (imgHeight > pdfHeight - margin * 2) {
+                         console.warn("Contenido de operario excede el tamaño de una página.");
+                    }
+                    
+                    pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, imgHeight);
+                }
+            }
+
+            pdf.save('reporte-produccion-detallado.pdf');
+
+        } catch (error) {
+            console.error("Error generating PDF:", error);
+        } finally {
+            // --- Cleanup ---
+            document.body.removeChild(clone);
+            setIsGeneratingPdf(false);
+        }
     };
+
 
   return (
     <div className="space-y-8">
@@ -319,250 +370,257 @@ export default function ReportsPage() {
             </div>
         ) : (
         <>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Makespan</CardTitle>
-                        <Clock4 className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{kpis.makespan.toFixed(2)} min</div>
-                        <p className="text-xs text-muted-foreground">Tiempo total de trabajo para la orden</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Utilización de Personal</CardTitle>
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{kpis.personnelUtilization.toFixed(2)}%</div>
-                        <p className="text-xs text-muted-foreground">Del total de operarios disponibles</p>
-                    </CardContent>
-                </Card>
-                 <Card className={
-                    kpis.deliveryStatus.status === 'A tiempo' ? 'bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800' :
-                    kpis.deliveryStatus.status === 'Retrasado' ? 'bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800' : ''
-                }>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Cumplimiento de Entrega</CardTitle>
-                         {kpis.deliveryStatus.status === 'A tiempo' && <CheckCircle className="h-4 w-4 text-green-600" />}
-                         {kpis.deliveryStatus.status === 'Retrasado' && <AlertTriangle className="h-4 w-4 text-red-600" />}
-                    </CardHeader>
-                    <CardContent>
-                        <div className={`text-2xl font-bold ${
-                            kpis.deliveryStatus.status === 'A tiempo' ? 'text-green-700 dark:text-green-400' :
-                            kpis.deliveryStatus.status === 'Retrasado' ? 'text-red-700 dark:text-red-400' : ''
-                        }`}>{kpis.deliveryStatus.status}</div>
-                         <p className="text-xs text-muted-foreground">
-                            Fin est.: {kpis.deliveryStatus.estimatedDate} vs Entrega: {kpis.deliveryStatus.targetDate}
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Unidades / Día</CardTitle>
-                        <Package className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{kpis.unitsPerDay.toFixed(2)}</div>
-                        <p className="text-xs text-muted-foreground">Producción estimada por día de 8h</p>
-                    </CardContent>
-                </Card>
-            </div>
-            
-            <h2 className="text-2xl font-bold font-headline pt-4">Diagramas</h2>
-            <Separator />
-            
-            <div className="grid gap-6 md:grid-cols-1">
-                <Card>
-                    <CardHeader>
-                    <CardTitle>Diagrama de Gantt (Carga Total por Operario)</CardTitle>
-                    <CardDescription>
-                        Secuencia y duración de las operaciones totales asignadas a cada operario.
-                    </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                       <ChartContainer config={ganttChartConfig} className="h-[400px] w-full">
-                        <ScatterChart margin={{ top: 20, right: 40, bottom: 20, left: 20 }}>
-                          <CartesianGrid />
-                          <XAxis type="number" dataKey="x[0]" name="start" label={{ value: "Tiempo (min)", position: 'insideBottom', offset: -10 }} domain={ganttDomain} />
-                          <YAxis type="number" dataKey="y" name="operative" interval={0} ticks={Array.from(operativeYMap.values())} tickFormatter={yAxisTickFormatter} domain={[-1, operativeYMap.size]} label={{ value: 'Operarios', angle: -90, position: 'insideLeft' }} />
-                           <Tooltip cursor={{ strokeDasharray: '3 3' }} content={
-                              <ChartTooltipContent
-                                  className="w-[200px]"
-                                  labelFormatter={(value, payload) => payload[0]?.payload.operative}
-                                  formatter={(value, name, props) => {
-                                      const { payload } = props;
-                                      if (payload.x) {
-                                          return (
-                                              <div className="flex flex-col gap-1 text-xs">
-                                                  <span className='font-bold'>{payload.operationName}</span>
-                                                  <span>Inicio: {payload.x[0].toFixed(2)} min</span>
-                                                  <span>Fin: {payload.x[1].toFixed(2)} min</span>
-                                                  <span>Dur: {(payload.x[1] - payload.x[0]).toFixed(2)} min</span>
-                                              </div>
-                                          );
-                                      }
-                                      return null;
-                                  }}
+            <div id="pdf-general-report">
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Makespan</CardTitle>
+                            <Clock4 className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{kpis.makespan.toFixed(2)} min</div>
+                            <p className="text-xs text-muted-foreground">Tiempo total de trabajo para la orden</p>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Utilización de Personal</CardTitle>
+                            <Users className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{kpis.personnelUtilization.toFixed(2)}%</div>
+                            <p className="text-xs text-muted-foreground">Del total de operarios disponibles</p>
+                        </CardContent>
+                    </Card>
+                     <Card className={
+                        kpis.deliveryStatus.status === 'A tiempo' ? 'bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800' :
+                        kpis.deliveryStatus.status === 'Retrasado' ? 'bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800' : ''
+                    }>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Cumplimiento de Entrega</CardTitle>
+                             {kpis.deliveryStatus.status === 'A tiempo' && <CheckCircle className="h-4 w-4 text-green-600" />}
+                             {kpis.deliveryStatus.status === 'Retrasado' && <AlertTriangle className="h-4 w-4 text-red-600" />}
+                        </CardHeader>
+                        <CardContent>
+                            <div className={`text-2xl font-bold ${
+                                kpis.deliveryStatus.status === 'A tiempo' ? 'text-green-700 dark:text-green-400' :
+                                kpis.deliveryStatus.status === 'Retrasado' ? 'text-red-700 dark:text-red-400' : ''
+                            }`}>{kpis.deliveryStatus.status}</div>
+                             <p className="text-xs text-muted-foreground">
+                                Fin est.: {kpis.deliveryStatus.estimatedDate} vs Entrega: {kpis.deliveryStatus.targetDate}
+                            </p>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Unidades / Día</CardTitle>
+                            <Package className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{kpis.unitsPerDay.toFixed(2)}</div>
+                            <p className="text-xs text-muted-foreground">Producción estimada por día de 8h</p>
+                        </CardContent>
+                    </Card>
+                </div>
+                
+                <h2 className="text-2xl font-bold font-headline pt-4">Diagramas</h2>
+                <Separator />
+                
+                <div className="grid gap-6 md:grid-cols-1">
+                    <Card>
+                        <CardHeader>
+                        <CardTitle>Diagrama de Gantt (Carga Total por Operario)</CardTitle>
+                        <CardDescription>
+                            Secuencia y duración de las operaciones totales asignadas a cada operario.
+                        </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                           <ChartContainer config={ganttChartConfig} className="h-[400px] w-full">
+                            <ScatterChart margin={{ top: 20, right: 40, bottom: 20, left: 20 }}>
+                              <CartesianGrid />
+                              <XAxis type="number" dataKey="x[0]" name="start" label={{ value: "Tiempo (min)", position: 'insideBottom', offset: -10 }} domain={ganttDomain} />
+                              <YAxis type="number" dataKey="y" name="operative" interval={0} ticks={Array.from(operativeYMap.values())} tickFormatter={yAxisTickFormatter} domain={[-1, operativeYMap.size]} label={{ value: 'Operarios', angle: -90, position: 'insideLeft' }} />
+                               <Tooltip cursor={{ strokeDasharray: '3 3' }} content={
+                                  <ChartTooltipContent
+                                      className="w-[200px]"
+                                      labelFormatter={(value, payload) => payload[0]?.payload.operative}
+                                      formatter={(value, name, props) => {
+                                          const { payload } = props;
+                                          if (payload.x) {
+                                              return (
+                                                  <div className="flex flex-col gap-1 text-xs">
+                                                      <span className='font-bold'>{payload.operationName}</span>
+                                                      <span>Inicio: {payload.x[0].toFixed(2)} min</span>
+                                                      <span>Fin: {payload.x[1].toFixed(2)} min</span>
+                                                      <span>Dur: {(payload.x[1] - payload.x[0]).toFixed(2)} min</span>
+                                                  </div>
+                                              );
+                                          }
+                                          return null;
+                                      }}
+                                  />
+                                }
                               />
-                            }
-                          />
-                           <Scatter data={ganttChartData} shape={({y, ...props}) => {
-                              const {payload, xAxis, yAxis} = props;
-                              if (Array.isArray(payload.x) && typeof payload.y === 'number' && payload.x.length === 2 && payload.fill && xAxis && yAxis) {
-                                  const startX = xAxis.scale(payload.x[0]);
-                                  const endX = xAxis.scale(payload.x[1]);
-                                  const width = endX - startX;
-                                  
-                                  const yPos = yAxis.scale(payload.y);
-                                  
-                                  if (typeof yPos === 'number') {
-                                    return <Rectangle {...props} x={startX} y={yPos - 5} width={width} height={10} />;
+                               <Scatter data={ganttChartData} shape={({y, ...props}) => {
+                                  const {payload, xAxis, yAxis} = props;
+                                  if (Array.isArray(payload.x) && typeof payload.y === 'number' && payload.x.length === 2 && payload.fill && xAxis && yAxis) {
+                                      const startX = xAxis.scale(payload.x[0]);
+                                      const endX = xAxis.scale(payload.x[1]);
+                                      const width = endX - startX;
+                                      
+                                      const yPos = yAxis.scale(payload.y);
+                                      
+                                      if (typeof yPos === 'number') {
+                                        return <Rectangle {...props} x={startX} y={yPos - 5} width={width} height={10} />;
+                                      }
                                   }
-                              }
-                              return null;
-                          }} />
-                        </ScatterChart>
-                      </ChartContainer>
-                    </CardContent>
-                </Card>
+                                  return null;
+                              }} />
+                            </ScatterChart>
+                          </ChartContainer>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader>
+                        <CardTitle>Carga de Actividades por Operario</CardTitle>
+                        <CardDescription>
+                            Número de operaciones distintas asignadas a cada operario.
+                        </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <ChartContainer config={{}} className="h-[400px] w-full">
+                            <BarChart data={activityLoadData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                              <CartesianGrid vertical={false} />
+                              <XAxis dataKey="name" />
+                              <YAxis allowDecimals={false} label={{ value: 'Nº Actividades', angle: -90, position: 'insideLeft' }} />
+                              <Tooltip content={<ChartTooltipContent />} />
+                              <Bar dataKey="actividades" fill="hsl(var(--primary))" radius={4} />
+                            </BarChart>
+                          </ChartContainer>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <h2 className="text-2xl font-bold font-headline pt-4">Resumen de Orden</h2>
+                <Separator />
                 <Card>
-                    <CardHeader>
-                    <CardTitle>Carga de Actividades por Operario</CardTitle>
-                    <CardDescription>
-                        Número de operaciones distintas asignadas a cada operario.
-                    </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <ChartContainer config={{}} className="h-[400px] w-full">
-                        <BarChart data={activityLoadData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                          <CartesianGrid vertical={false} />
-                          <XAxis dataKey="name" />
-                          <YAxis allowDecimals={false} label={{ value: 'Nº Actividades', angle: -90, position: 'insideLeft' }} />
-                          <Tooltip content={<ChartTooltipContent />} />
-                          <Bar dataKey="actividades" fill="hsl(var(--primary))" radius={4} />
-                        </BarChart>
-                      </ChartContainer>
+                    <CardContent className="pt-6 text-sm">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                            <div className="space-y-2">
+                                <h3 className="font-semibold text-base mb-2">Información General</h3>
+                                <p><strong>Cliente(s):</strong> {orderSummary.clients.join(', ')}</p>
+                                <p><strong>Orden(es):</strong> {orderSummary.orderIds.join(', ')}</p>
+                                <p><strong>Tamaño Total Lote:</strong> {orderSummary.totalLoteSize} unidades</p>
+                            </div>
+                            <div className="space-y-2">
+                                 <h3 className="font-semibold text-base mb-2">Productos a Producir</h3>
+                                <Table>
+                                    <TableHeader><TableRow><TableHead className="h-8">Producto</TableHead><TableHead className="h-8 text-right">Cantidad</TableHead></TableRow></TableHeader>
+                                    <TableBody>
+                                        {orderSummary.products.map(p => (
+                                            <TableRow key={p.name}><TableCell className="py-1">{p.name}</TableCell><TableCell className="py-1 text-right">{p.qty}</TableCell></TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                            <div className="md:col-span-1">
+                                <h3 className="font-semibold text-base mb-2">Tiempo Total por Actividad (min)</h3>
+                                 <ChartContainer config={{}} className="h-[250px] w-full">
+                                     <BarChart data={orderSummary.timeByActivity} layout="vertical" margin={{left: 120, right: 20}}>
+                                         <CartesianGrid horizontal={false} />
+                                         <XAxis type="number" dataKey="time" />
+                                         <YAxis type="category" dataKey="name" width={120} axisLine={false} tickLine={false} />
+                                         <Tooltip content={<ChartTooltipContent />} />
+                                         <Bar dataKey="time" fill="hsl(var(--primary))" radius={4}>
+                                            <LabelList dataKey="time" position="right" offset={8} className="fill-foreground text-xs" formatter={(value: number) => value.toFixed(0)} />
+                                         </Bar>
+                                     </BarChart>
+                                 </ChartContainer>
+                            </div>
+                             <div className="md:col-span-1">
+                                <h3 className="font-semibold text-base mb-2">Tiempo Total por Máquina (min)</h3>
+                                 <ChartContainer config={{}} className="h-[250px] w-full">
+                                    <BarChart data={orderSummary.timeByMachine} layout="vertical" margin={{left: 100, right: 20}}>
+                                         <CartesianGrid horizontal={false} />
+                                         <XAxis type="number" dataKey="time" />
+                                         <YAxis type="category" dataKey="name" width={100} axisLine={false} tickLine={false} />
+                                         <Tooltip content={<ChartTooltipContent />} />
+                                         <Bar dataKey="time" fill="hsl(var(--primary))" radius={4}>
+                                            <LabelList dataKey="time" position="right" offset={8} className="fill-foreground text-xs" formatter={(value: number) => value.toFixed(0)} />
+                                         </Bar>
+                                     </BarChart>
+                                 </ChartContainer>
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
             </div>
 
-            <h2 className="text-2xl font-bold font-headline pt-4">Resumen de Orden</h2>
-            <Separator />
-            <Card>
-                <CardContent className="pt-6 text-sm">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                        <div className="space-y-2">
-                            <h3 className="font-semibold text-base mb-2">Información General</h3>
-                            <p><strong>Cliente(s):</strong> {orderSummary.clients.join(', ')}</p>
-                            <p><strong>Orden(es):</strong> {orderSummary.orderIds.join(', ')}</p>
-                            <p><strong>Tamaño Total Lote:</strong> {orderSummary.totalLoteSize} unidades</p>
-                        </div>
-                        <div className="space-y-2">
-                             <h3 className="font-semibold text-base mb-2">Productos a Producir</h3>
-                            <Table>
-                                <TableHeader><TableRow><TableHead className="h-8">Producto</TableHead><TableHead className="h-8 text-right">Cantidad</TableHead></TableRow></TableHeader>
-                                <TableBody>
-                                    {orderSummary.products.map(p => (
-                                        <TableRow key={p.name}><TableCell className="py-1">{p.name}</TableCell><TableCell className="py-1 text-right">{p.qty}</TableCell></TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                        <div className="md:col-span-1">
-                            <h3 className="font-semibold text-base mb-2">Tiempo Total por Actividad (min)</h3>
-                             <ChartContainer config={{}} className="h-[250px] w-full">
-                                 <BarChart data={orderSummary.timeByActivity} layout="vertical" margin={{left: 120, right: 20}}>
-                                     <CartesianGrid horizontal={false} />
-                                     <XAxis type="number" dataKey="time" />
-                                     <YAxis type="category" dataKey="name" width={120} axisLine={false} tickLine={false} />
-                                     <Tooltip content={<ChartTooltipContent />} />
-                                     <Bar dataKey="time" fill="hsl(var(--primary))" radius={4}>
-                                        <LabelList dataKey="time" position="right" offset={8} className="fill-foreground text-xs" formatter={(value: number) => value.toFixed(0)} />
-                                     </Bar>
-                                 </BarChart>
-                             </ChartContainer>
-                        </div>
-                         <div className="md:col-span-1">
-                            <h3 className="font-semibold text-base mb-2">Tiempo Total por Máquina (min)</h3>
-                             <ChartContainer config={{}} className="h-[250px] w-full">
-                                <BarChart data={orderSummary.timeByMachine} layout="vertical" margin={{left: 100, right: 20}}>
-                                     <CartesianGrid horizontal={false} />
-                                     <XAxis type="number" dataKey="time" />
-                                     <YAxis type="category" dataKey="name" width={100} axisLine={false} tickLine={false} />
-                                     <Tooltip content={<ChartTooltipContent />} />
-                                     <Bar dataKey="time" fill="hsl(var(--primary))" radius={4}>
-                                        <LabelList dataKey="time" position="right" offset={8} className="fill-foreground text-xs" formatter={(value: number) => value.toFixed(0)} />
-                                     </Bar>
-                                 </BarChart>
-                             </ChartContainer>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
 
-
-            <h2 className="text-2xl font-bold font-headline pt-4">Resumen de Carga por Operario</h2>
-            <Separator />
-            <Card>
-                <CardContent className="pt-6">
-                    <Accordion type="single" collapsible className="w-full">
-                        {allOperativesWithTasks.map(opId => (
-                            <AccordionItem value={opId} key={opId}>
-                                <AccordionTrigger className="text-base font-medium">
-                                    <div className="flex justify-between w-full pr-4">
-                                        <span>{opId}</span>
-                                        <span className="text-muted-foreground font-normal">
-                                            {operativeSummary.filter(t => t.operative === opId).length} actividades asignadas
-                                        </span>
-                                    </div>
-                                </AccordionTrigger>
-                                <AccordionContent>
-                                    <div className="px-1 pb-4">
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead>Sec</TableHead>
-                                                    <TableHead>Producto (Ref)</TableHead>
-                                                    <TableHead>Cliente (Orden)</TableHead>
-                                                    <TableHead>Operación</TableHead>
-                                                    <TableHead>Máquina</TableHead>
-                                                    <TableHead>SAM Unit.</TableHead>
-                                                    <TableHead className="text-right">Tiempo Asignado (min)</TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {operativeSummary.filter(t => t.operative === opId).sort((a,b) => a.consecutivo - b.consecutivo).map((task, index) => (
-                                                    <TableRow key={`${task.taskId}-${index}`}>
-                                                        <TableCell>{task.consecutivo}</TableCell>
-                                                        <TableCell><div>{task.product}</div><div className="text-xs text-muted-foreground">{task.productRef}</div></TableCell>
-                                                        <TableCell><div>{task.client}</div><div className="text-xs text-muted-foreground">{task.orderId}</div></TableCell>
-                                                        <TableCell>{task.operationName}</TableCell>
-                                                        <TableCell>{task.maquina}</TableCell>
-                                                        <TableCell>{task.unitSam.toFixed(2)}</TableCell>
-                                                        <TableCell className="text-right">{task.assignedTime.toFixed(2)}</TableCell>
+            <div id="pdf-operative-summary">
+                <h2 className="text-2xl font-bold font-headline pt-4">Resumen de Carga por Operario</h2>
+                <Separator />
+                <Card>
+                    <CardContent className="pt-6">
+                        <Accordion type="single" collapsible className="w-full">
+                            {allOperativesWithTasks.map(opId => (
+                                <AccordionItem value={opId} key={opId} className="pdf-operative-item">
+                                    <AccordionTrigger className="text-base font-medium">
+                                        <div className="flex justify-between w-full pr-4">
+                                            <span>{opId}</span>
+                                            <span className="text-muted-foreground font-normal">
+                                                {operativeSummary.filter(t => t.operative === opId).length} actividades asignadas
+                                            </span>
+                                        </div>
+                                    </AccordionTrigger>
+                                    <AccordionContent>
+                                        <div className="px-1 pb-4">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Sec</TableHead>
+                                                        <TableHead>Producto (Ref)</TableHead>
+                                                        <TableHead>Cliente (Orden)</TableHead>
+                                                        <TableHead>Operación</TableHead>
+                                                        <TableHead>Máquina</TableHead>
+                                                        <TableHead>SAM Unit.</TableHead>
+                                                        <TableHead className="text-right">Tiempo Asignado (min)</TableHead>
                                                     </TableRow>
-                                                ))}
-                                            </TableBody>
-                                            <TableFooter>
-                                                <TableRow>
-                                                    <TableCell colSpan={6} className="text-right font-bold">Tiempo Total Asignado:</TableCell>
-                                                    <TableCell className="text-right font-bold">{operativeSummary.filter(t => t.operative === opId).reduce((sum, task) => sum + task.assignedTime, 0).toFixed(2)} min</TableCell>
-                                                </TableRow>
-                                            </TableFooter>
-                                        </Table>
-                                    </div>
-                                </AccordionContent>
-                            </AccordionItem>
-                        ))}
-                    </Accordion>
-                </CardContent>
-            </Card>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {operativeSummary.filter(t => t.operative === opId).sort((a,b) => a.consecutivo - b.consecutivo).map((task, index) => (
+                                                        <TableRow key={`${task.taskId}-${index}`}>
+                                                            <TableCell>{task.consecutivo}</TableCell>
+                                                            <TableCell><div>{task.product}</div><div className="text-xs text-muted-foreground">{task.productRef}</div></TableCell>
+                                                            <TableCell><div>{task.client}</div><div className="text-xs text-muted-foreground">{task.orderId}</div></TableCell>
+                                                            <TableCell>{task.operationName}</TableCell>
+                                                            <TableCell>{task.maquina}</TableCell>
+                                                            <TableCell>{task.unitSam.toFixed(2)}</TableCell>
+                                                            <TableCell className="text-right">{task.assignedTime.toFixed(2)}</TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                                <TableFooter>
+                                                    <TableRow>
+                                                        <TableCell colSpan={6} className="text-right font-bold">Tiempo Total Asignado:</TableCell>
+                                                        <TableCell className="text-right font-bold">{operativeSummary.filter(t => t.operative === opId).reduce((sum, task) => sum + task.assignedTime, 0).toFixed(2)} min</TableCell>
+                                                    </TableRow>
+                                                </TableFooter>
+                                            </Table>
+                                        </div>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            ))}
+                        </Accordion>
+                    </CardContent>
+                </Card>
+            </div>
         </>
       )}
       </div>
     </div>
   );
 }
+
+
+    
