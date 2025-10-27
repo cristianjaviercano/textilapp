@@ -24,8 +24,6 @@ interface SchedulingData {
   unitsPerHour: Record<string, number>;
 }
 
-const ORDERS_LOCAL_STORAGE_KEY = 'productionOrders';
-
 export default function AssignmentPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -108,11 +106,17 @@ export default function AssignmentPage() {
 
     const otherAssignmentsForOperative = Object.keys(assignments)
       .filter(tId => tId !== taskId)
-      .reduce((sum, currentTaskId) => sum + (assignments[currentTaskId]?.[operativeId] || 0), 0);
+      .reduce((sum, currentTaskId) => {
+        const currentTask = data.tasks.find(t => t.id === currentTaskId);
+        if (currentTask && currentTask.productDescription === task.productDescription) {
+            return sum + (assignments[currentTaskId]?.[operativeId] || 0)
+        }
+        return sum;
+      }, 0);
     
     if (otherAssignmentsForOperative + samToAssign > data.levelingUnit) {
         samToAssign = Math.max(0, data.levelingUnit - otherAssignmentsForOperative);
-        toast({ title: "Límite de Operario Excedido", description: `La carga de ${operativeId} no puede superar los ${data.levelingUnit} min.`});
+        toast({ title: "Límite de Operario Excedido", description: `La carga de ${operativeId} para este producto no puede superar los ${data.levelingUnit} min.`});
     }
 
     setAssignments(prev => ({
@@ -125,15 +129,27 @@ export default function AssignmentPage() {
   };
   
   const summaryTotals = useMemo(() => {
-    if (!data) return { operativeTotals: {}, totalsByProduct: {}, globalTotals: {} };
+    if (!data) return { operativeTotals: {}, totalsByProduct: {} };
     
-    const operativeTotals: Record<string, number> = {};
-    data.operatives.forEach(op => operativeTotals[op.id] = 0);
+    const operativeTotals: Record<string, Record<string, number>> = {};
+    data.operatives.forEach(op => {
+        operativeTotals[op.id] = {};
+    });
 
-    Object.values(assignments).forEach(taskAssignments => {
-        Object.entries(taskAssignments).forEach(([operativeId, value]) => {
-            operativeTotals[operativeId] = (operativeTotals[operativeId] || 0) + value;
-        });
+    Object.entries(assignments).forEach(([taskId, taskAssignments]) => {
+      const task = data.tasks.find(t => t.id === taskId);
+      if (!task) return;
+      const productName = task.productDescription;
+
+      Object.entries(taskAssignments).forEach(([operativeId, value]) => {
+        if (!operativeTotals[operativeId]) {
+            operativeTotals[operativeId] = {};
+        }
+        if (!operativeTotals[operativeId][productName]) {
+            operativeTotals[operativeId][productName] = 0;
+        }
+        operativeTotals[operativeId][productName] += value;
+      });
     });
 
     const totalsByProduct = Object.keys(tasksByProduct).reduce((acc, productName) => {
@@ -167,37 +183,54 @@ export default function AssignmentPage() {
     setAiSummary(null);
 
     const newAssignments: AssignmentData = {};
-    const operativeLoads: Record<string, number> = data.operatives.reduce((acc, op) => {
-      acc[op.id] = 0;
+
+    // Group tasks by product
+    const tasksGroupedByProduct = data.tasks.reduce((acc, task) => {
+      const key = task.productDescription;
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(task);
       return acc;
-    }, {} as Record<string, number>);
+    }, {} as Record<string, Task[]>);
 
-    for (const task of data.tasks) {
-      const unitsPerHour = data.unitsPerHour?.[task.productDescription] || 0;
-      let samToDistribute = task.unitSam * unitsPerHour;
-      
-      if (samToDistribute <= 0.01) continue;
+    // Process each product group independently
+    for (const productName in tasksGroupedByProduct) {
+        const productTasks = tasksGroupedByProduct[productName];
+        
+        // Operative loads are reset for each product
+        const operativeLoads: Record<string, number> = data.operatives.reduce((acc, op) => {
+            acc[op.id] = 0;
+            return acc;
+        }, {});
 
-      if (!newAssignments[task.id]) {
-        newAssignments[task.id] = {};
-      }
-      
-      for (const operative of data.operatives) {
-        if (samToDistribute <= 0.01) break;
+        for (const task of productTasks) {
+            const unitsPerHour = data.unitsPerHour?.[task.productDescription] || 0;
+            let samToDistribute = task.unitSam * unitsPerHour;
+            
+            if (samToDistribute <= 0.01) continue;
 
-        const remainingOperativeCapacity = data.levelingUnit - (operativeLoads[operative.id] || 0);
-        if (remainingOperativeCapacity <= 0) continue;
+            if (!newAssignments[task.id]) {
+                newAssignments[task.id] = {};
+            }
+            
+            for (const operative of data.operatives) {
+                if (samToDistribute <= 0.01) break;
 
-        const assignedAmount = Math.min(samToDistribute, remainingOperativeCapacity);
+                const remainingOperativeCapacity = data.levelingUnit - (operativeLoads[operative.id] || 0);
+                if (remainingOperativeCapacity <= 0) continue;
 
-        newAssignments[task.id][operative.id] = (newAssignments[task.id][operative.id] || 0) + assignedAmount;
-        operativeLoads[operative.id] += assignedAmount;
-        samToDistribute -= assignedAmount;
-      }
+                const assignedAmount = Math.min(samToDistribute, remainingOperativeCapacity);
+
+                newAssignments[task.id][operative.id] = (newAssignments[task.id][operative.id] || 0) + assignedAmount;
+                operativeLoads[operative.id] += assignedAmount;
+                samToDistribute -= assignedAmount;
+            }
+        }
     }
 
     setAssignments(newAssignments);
-    setAiSummary("Asignación automática completada con el algoritmo de nivelación secuencial.");
+    setAiSummary("Asignación automática completada con el algoritmo de nivelación secuencial por producto.");
     setIsLoading(false);
     toast({ title: "Éxito", description: "Las tareas han sido asignadas automáticamente." });
   };
@@ -359,14 +392,14 @@ export default function AssignmentPage() {
                               <TableCell className="text-right">{summaryTotals.totalsByProduct[productName]?.totalRequiredSam.toFixed(2) || '0.00'}</TableCell>
                               <TableCell></TableCell>
                               {data.operatives.map(op => {
-                                  const totalMinutes = summaryTotals.operativeTotals[op.id] || 0;
+                                  const totalMinutes = summaryTotals.operativeTotals[op.id]?.[productName] || 0;
                                   return (<TableCell key={op.id} className="text-right font-bold">{totalMinutes.toFixed(2)}</TableCell>)
                               })}
                           </TableRow>
                           <TableRow className="bg-secondary hover:bg-secondary">
                             <th colSpan={7} className="p-2 text-right font-bold sticky left-0 bg-secondary z-10">Total Asignado (Nivelación)</th>
                             {data.operatives.map(op => {
-                               const totalMinutes = summaryTotals.operativeTotals[op.id] || 0;
+                               const totalMinutes = summaryTotals.operativeTotals[op.id]?.[productName] || 0;
                                const levelingMinutes = data.levelingUnit;
                                const usage = levelingMinutes > 0 ? (totalMinutes / levelingMinutes) * 100 : 0;
                                const isOverloaded = totalMinutes > levelingMinutes;
