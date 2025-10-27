@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -61,19 +62,21 @@ export default function ReportsPage() {
         ganttChartConfig,
         activityLoadData,
         operativeSummary,
-        orderSummary
+        orderSummary,
+        allOperativesWithTasks,
     } = useMemo(() => {
         if (activeOrderIds.length === 0) {
             return {
               kpis: { makespan: 0, personnelUtilization: 0, unitsPerDay: 0, deliveryStatus: { status: 'N/A', diffDays: 0, estimatedDate: '', targetDate: '' }},
               ganttChartData: [], ganttChartConfig: {}, activityLoadData: [], operativeSummary: [],
-              orderSummary: { clients: [], orderIds: [], products: [], totalLoteSize: 0, timeByActivity: [], timeByMachine: [] }
+              orderSummary: { clients: [], orderIds: [], products: [], totalLoteSize: 0, timeByActivity: [], timeByMachine: [] },
+              allOperativesWithTasks: [],
             };
         }
         
         let totalMakespan = 0;
         let totalUnits = 0;
-        let operativesWithAssignments = new Set<string>();
+        const operativesWithAssignments = new Set<string>();
 
         const operativeTasks: Record<string, any[]> = {};
         const allOperations = new Set<string>();
@@ -136,9 +139,9 @@ export default function ReportsPage() {
             }
         });
         
-        const allOperativesWithTasks = Array.from(operativesWithAssignments).sort();
+        const sortedOperatives = Array.from(operativesWithAssignments).sort();
         const numOperatives = 8; // Assuming 8 operatives as per scheduling page
-        const personnelUtilization = numOperatives > 0 ? (allOperativesWithTasks.length / numOperatives) * 100 : 0;
+        const personnelUtilization = numOperatives > 0 ? (sortedOperatives.length / numOperatives) * 100 : 0;
         
         const ganttData: any[] = [];
         const newGanttConfig: ChartConfig = {};
@@ -146,7 +149,7 @@ export default function ReportsPage() {
           newGanttConfig[op] = { label: op, color: generateColorFromString(op) };
         });
 
-        allOperativesWithTasks.forEach((opId, index) => {
+        sortedOperatives.forEach((opId, index) => {
             let currentTime = 0;
             const tasks = (operativeTasks[opId] || []).sort((a, b) => a.consecutivo - b.consecutivo);
             tasks.forEach(task => {
@@ -158,7 +161,7 @@ export default function ReportsPage() {
                         y: index,
                         operative: opId,
                         operationName: task.operationName,
-                        fill: newGanttConfig[task.operationName].color
+                        fill: newGanttConfig[task.operationName]?.color
                     });
                 }
                 currentTime = endTime;
@@ -187,12 +190,12 @@ export default function ReportsPage() {
         
         const unitsPerDay = productionDays > 0 ? totalUnits / productionDays : 0;
 
-        const activityLoadData = allOperativesWithTasks.map(opId => ({
+        const activityLoadData = sortedOperatives.map(opId => ({
             name: opId,
             actividades: (operativeTasks[opId] || []).length
         }));
 
-        const newOperativeSummary = allOperativesWithTasks.flatMap(opId => operativeTasks[opId] || []);
+        const newOperativeSummary = sortedOperatives.flatMap(opId => operativeTasks[opId] || []);
 
         const finalOrderSummary = {
              clients: Array.from(clients),
@@ -210,6 +213,7 @@ export default function ReportsPage() {
             activityLoadData,
             operativeSummary: newOperativeSummary,
             orderSummary: finalOrderSummary,
+            allOperativesWithTasks: sortedOperatives,
         };
 
     }, [selectedOrders, orders, activeOrderIds, relevantOrders]);
@@ -326,43 +330,49 @@ export default function ReportsPage() {
                     </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <ChartContainer config={ganttChartConfig} className="min-h-[400px] w-full">
-                            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                            <CartesianGrid />
-                            <XAxis type="number" dataKey="x[0]" name="start" label={{ value: "Tiempo (min)", position: 'insideBottom', offset: -10 }} domain={[0, 60]} ticks={[0, 10, 20, 30, 40, 50, 60]} />
-                            <YAxis type="category" dataKey="operative" name="operative" interval={0} ticks={Array.from(operativeSummary.reduce((acc, op) => acc.add(op.operative), new Set<string>())).sort()} label={{ value: 'Operarios', angle: -90, position: 'insideLeft' }} />
-                            <Tooltip cursor={{ strokeDasharray: '3 3' }} content={
-                                <ChartTooltipContent
-                                    className="w-[200px]"
-                                    labelFormatter={(value, payload) => payload[0]?.payload.operative}
-                                    formatter={(value, name, props) => {
-                                        const { payload } = props;
-                                        if (payload.x) {
-                                            return (
-                                                <div className="flex flex-col gap-1 text-xs">
-                                                    <span className='font-bold'>{payload.operationName}</span>
-                                                    <span>Inicio: {payload.x[0].toFixed(2)} min</span>
-                                                    <span>Fin: {payload.x[1].toFixed(2)} min</span>
-                                                    <span>Dur: {(payload.x[1] - payload.x[0]).toFixed(2)} min</span>
-                                                </div>
-                                            );
-                                        }
-                                        return null;
-                                    }}
-                                />
-                                }
-                            />
-                            <Scatter data={ganttChartData} shape={({x, y, ...props}) => {
-                                const {payload} = props;
-                                if (Array.isArray(payload.x) && typeof y === 'number' && payload.x.length === 2) {
-                                    const [x_start, x_end] = payload.x;
-                                    const width = x_end - x_start;
-                                    return <Rectangle {...props} x={x_start} y={y - 5} width={width} height={10} />;
-                                }
-                                return null;
-                            }} />
-                            </ScatterChart>
-                        </ChartContainer>
+                      <ChartContainer config={ganttChartConfig} className="min-h-[400px] w-full">
+                        <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                          <CartesianGrid />
+                          <XAxis type="number" dataKey="x[0]" name="start" label={{ value: "Tiempo (min)", position: 'insideBottom', offset: -10 }} domain={[0, 60]} ticks={[0, 10, 20, 30, 40, 50, 60]} />
+                          <YAxis type="category" dataKey="operative" name="operative" interval={0} ticks={allOperativesWithTasks} label={{ value: 'Operarios', angle: -90, position: 'insideLeft' }} />
+                          <Tooltip cursor={{ strokeDasharray: '3 3' }} content={
+                              <ChartTooltipContent
+                                  className="w-[200px]"
+                                  labelFormatter={(value, payload) => payload[0]?.payload.operative}
+                                  formatter={(value, name, props) => {
+                                      const { payload } = props;
+                                      if (payload.x) {
+                                          return (
+                                              <div className="flex flex-col gap-1 text-xs">
+                                                  <span className='font-bold'>{payload.operationName}</span>
+                                                  <span>Inicio: {payload.x[0].toFixed(2)} min</span>
+                                                  <span>Fin: {payload.x[1].toFixed(2)} min</span>
+                                                  <span>Dur: {(payload.x[1] - payload.x[0]).toFixed(2)} min</span>
+                                              </div>
+                                          );
+                                      }
+                                      return null;
+                                  }}
+                              />
+                            }
+                          />
+                          <Scatter data={ganttChartData} shape={({x, y, ...props}) => {
+                              const {payload} = props;
+                              if (Array.isArray(payload.x) && typeof y === 'number' && payload.x.length === 2 && payload.fill) {
+                                  const [x_start, x_end] = payload.x;
+                                  const width = x_end - x_start;
+                                  // This is a rough conversion from chart scale to pixel width for the shape.
+                                  // It assumes the XAxis domain [0,60] maps to the available chart width.
+                                  const domainWidth = 60;
+                                  const chartWidth = props.xAxis.width; // rough estimate
+                                  const pixelWidth = (width / domainWidth) * chartWidth;
+                                  
+                                  return <Rectangle {...props} x={props.xAxis.scale(x_start)} y={y - 5} width={props.xAxis.scale(x_end) - props.xAxis.scale(x_start)} height={10} />;
+                              }
+                              return null;
+                          }} />
+                        </ScatterChart>
+                      </ChartContainer>
                     </CardContent>
                 </Card>
                 <Card>
@@ -440,7 +450,7 @@ export default function ReportsPage() {
             <Card>
                 <CardContent className="pt-6">
                     <Accordion type="single" collapsible className="w-full">
-                        {Array.from(operativesWithAssignments).sort().map(opId => (
+                        {allOperativesWithTasks.map(opId => (
                             <AccordionItem value={opId} key={opId}>
                                 <AccordionTrigger className="text-base font-medium">
                                     <div className="flex justify-between w-full pr-4">
@@ -496,3 +506,5 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+    
