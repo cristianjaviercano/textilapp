@@ -213,5 +213,29 @@
         "unitsPerDay": 627.4509803921567
       }
     ]
+  },
+  {
+    "nombreCliente": "cliente3",
+    "fechaEntrega": "2025-10-31",
+    "prioridad": 5,
+    "items": [
+      {
+        "referencia": "16534",
+        "cantidad": 500
+      }
+    ],
+    "id": "ORD-1761580520534"
+  },
+  {
+    "nombreCliente": "cliente3",
+    "fechaEntrega": "2025-10-28",
+    "prioridad": 3,
+    "items": [
+      {
+        "referencia": "14921",
+        "cantidad": 500
+      }
+    ],
+    "id": "ORD-1761580554933"
   }
 ]

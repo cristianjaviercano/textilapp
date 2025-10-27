@@ -14,7 +14,7 @@ export async function saveOrdersData(orders: ProductionOrder[]): Promise<{
   console.log("Saving Orders data...", orders.length, "records");
 
   try {
-    // To properly update, we should read the existing orders and merge the changes
+    // To properly update, we should read the existing orders and merge/add the new ones.
     let existingOrders: ProductionOrder[] = [];
     try {
       const fileData = await fs.readFile(ordersFilePath, 'utf-8');
@@ -24,19 +24,18 @@ export async function saveOrdersData(orders: ProductionOrder[]): Promise<{
       console.log("Orders file not found, creating a new one.");
     }
 
-    const updatedOrders = existingOrders.map(eo => {
-      const updatedOrder = orders.find(o => o.id === eo.id);
-      return updatedOrder || eo;
-    });
+    const updatedOrdersMap = new Map<string, ProductionOrder>();
 
-    // Add new orders that weren't in the existing file
-    orders.forEach(o => {
-      if (!updatedOrders.some(uo => uo.id === o.id)) {
-        updatedOrders.push(o);
-      }
-    });
+    // First, add all existing orders to the map
+    existingOrders.forEach(order => updatedOrdersMap.set(order.id, order));
+
+    // Then, iterate through the new orders from the client.
+    // This will add new orders and overwrite existing ones with new data.
+    orders.forEach(order => updatedOrdersMap.set(order.id, order));
+
+    const finalOrders = Array.from(updatedOrdersMap.values());
     
-    const data = JSON.stringify(updatedOrders, null, 2);
+    const data = JSON.stringify(finalOrders, null, 2);
     await fs.writeFile(ordersFilePath, data, 'utf-8');
     
     revalidatePath('/(app)/orders', 'page');
