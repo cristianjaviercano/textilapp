@@ -75,11 +75,9 @@ export default function ReportsPage() {
         let totalUnits = 0;
         let operativesWithAssignments = new Set<string>();
 
-        // For Gantt
         const operativeTasks: Record<string, any[]> = {};
         const allOperations = new Set<string>();
 
-        // For Order Summary
         const clients = new Set<string>();
         const orderIds = new Set<string>();
         const products = new Map<string, number>();
@@ -142,7 +140,6 @@ export default function ReportsPage() {
         const numOperatives = 8; // Assuming 8 operatives as per scheduling page
         const personnelUtilization = numOperatives > 0 ? (allOperativesWithTasks.length / numOperatives) * 100 : 0;
         
-        // Gantt Chart Data
         const ganttData: any[] = [];
         const newGanttConfig: ChartConfig = {};
         allOperations.forEach(op => {
@@ -155,7 +152,7 @@ export default function ReportsPage() {
             tasks.forEach(task => {
                 const startTime = currentTime;
                 const endTime = startTime + task.unitSam;
-                if(endTime <= 60) { // Only show tasks within the first 60 minutes
+                if(endTime <= 60) {
                     ganttData.push({
                         x: [startTime, endTime],
                         y: index,
@@ -168,7 +165,6 @@ export default function ReportsPage() {
             });
         });
 
-        // Delivery Status & Units per day
         const deliveryDates = relevantOrders.map(o => parseISO(o.fechaEntrega)).sort((a,b) => b.getTime() - a.getTime());
         const latestDeliveryDate = deliveryDates[0];
         const productionDays = totalMakespan > 0 ? (totalMakespan / 60) / 8 : 0; // 8-hour workday
@@ -330,40 +326,43 @@ export default function ReportsPage() {
                     </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <ChartContainer config={ganttChartConfig} className="min-h-[400px] w-full">
-                        <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                          <CartesianGrid />
-                          <XAxis type="number" dataKey="x[0]" name="start" label={{ value: "Tiempo (min)", position: 'insideBottom', offset: -10 }} domain={[0, 60]} ticks={[0, 10, 20, 30, 40, 50, 60]} />
-                           <YAxis type="category" dataKey="operative" name="operative" interval={0} ticks={Array.from(operativeSummary.reduce((acc, op) => acc.add(op.operative), new Set<string>())).sort()} label={{ value: 'Operarios', angle: -90, position: 'insideLeft' }} />
-                          <Tooltip cursor={{ strokeDasharray: '3 3' }} content={
-                              <ChartTooltipContent
-                                  className="w-[200px]"
-                                  labelFormatter={(value, payload) => payload[0]?.payload.operative}
-                                  formatter={(value, name, props) => {
-                                      const { payload } = props;
-                                      return (
-                                          <div className="flex flex-col gap-1 text-xs">
-                                              <span className='font-bold'>{payload.operationName}</span>
-                                              <span>Inicio: {payload.x[0].toFixed(2)} min</span>
-                                              <span>Fin: {payload.x[1].toFixed(2)} min</span>
-                                              <span>Dur: {(payload.x[1] - payload.x[0]).toFixed(2)} min</span>
-                                          </div>
-                                      );
-                                  }}
-                              />
-                            }
-                          />
-                          <Scatter data={ganttChartData} shape={({x, y, ...props}) => {
-                              const {payload} = props;
-                              if (Array.isArray(payload.x) && typeof y === 'number') {
-                                const [x_start, x_end] = payload.x;
-                                const width = x_end - x_start;
-                                return <Rectangle {...props} x={x_start} y={y - 5} width={width} height={10} />;
-                              }
-                              return null;
-                          }} />
-                        </ScatterChart>
-                      </ChartContainer>
+                        <ChartContainer config={ganttChartConfig} className="min-h-[400px] w-full">
+                            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                            <CartesianGrid />
+                            <XAxis type="number" dataKey="x[0]" name="start" label={{ value: "Tiempo (min)", position: 'insideBottom', offset: -10 }} domain={[0, 60]} ticks={[0, 10, 20, 30, 40, 50, 60]} />
+                            <YAxis type="category" dataKey="operative" name="operative" interval={0} ticks={Array.from(operativeSummary.reduce((acc, op) => acc.add(op.operative), new Set<string>())).sort()} label={{ value: 'Operarios', angle: -90, position: 'insideLeft' }} />
+                            <Tooltip cursor={{ strokeDasharray: '3 3' }} content={
+                                <ChartTooltipContent
+                                    className="w-[200px]"
+                                    labelFormatter={(value, payload) => payload[0]?.payload.operative}
+                                    formatter={(value, name, props) => {
+                                        const { payload } = props;
+                                        if (payload.x) {
+                                            return (
+                                                <div className="flex flex-col gap-1 text-xs">
+                                                    <span className='font-bold'>{payload.operationName}</span>
+                                                    <span>Inicio: {payload.x[0].toFixed(2)} min</span>
+                                                    <span>Fin: {payload.x[1].toFixed(2)} min</span>
+                                                    <span>Dur: {(payload.x[1] - payload.x[0]).toFixed(2)} min</span>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
+                                />
+                                }
+                            />
+                            <Scatter data={ganttChartData} shape={({x, y, ...props}) => {
+                                const {payload} = props;
+                                if (Array.isArray(payload.x) && typeof y === 'number' && payload.x.length === 2) {
+                                    const [x_start, x_end] = payload.x;
+                                    const width = x_end - x_start;
+                                    return <Rectangle {...props} x={x_start} y={y - 5} width={width} height={10} />;
+                                }
+                                return null;
+                            }} />
+                            </ScatterChart>
+                        </ChartContainer>
                     </CardContent>
                 </Card>
                 <Card>
