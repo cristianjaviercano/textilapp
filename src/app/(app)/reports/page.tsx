@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -14,6 +13,7 @@ import {
   ScatterChart,
   Scatter,
   Rectangle,
+  LabelList,
 } from 'recharts';
 import {
   Card,
@@ -183,15 +183,15 @@ export default function ReportsPage() {
             }
         });
         
-        const ganttDomain = [0, Math.ceil(maxTime / 10) * 10 || 60];
+        const ganttDomain = [0, kpis.makespan > 0 ? kpis.makespan : (Math.ceil(maxTime / 10) * 10 || 60)];
         
         const deliveryDates = relevantOrders.map(o => parseISO(o.fechaEntrega)).sort((a,b) => b.getTime() - a.getTime());
         const latestDeliveryDate = deliveryDates[0];
         const productionDays = totalMakespan > 0 ? (totalMakespan / 60) / 8 : 0; // 8-hour workday
-        const estimatedEndDate = addDays(new Date(), Math.ceil(productionDays));
         let deliveryStatus = { status: 'N/A', diffDays: 0, estimatedDate: '', targetDate: '' };
 
         if(latestDeliveryDate) {
+            const estimatedEndDate = addDays(new Date(), Math.ceil(productionDays));
             const diffDays = differenceInDays(latestDeliveryDate, estimatedEndDate);
             let status = '';
             if (diffDays >= 0) status = 'A tiempo';
@@ -423,46 +423,52 @@ export default function ReportsPage() {
             <h2 className="text-2xl font-bold font-headline pt-4">Resumen de Orden</h2>
             <Separator />
             <Card>
-                <CardContent className="pt-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div>
-                            <h3 className="font-semibold mb-2">Información General</h3>
+                <CardContent className="pt-6 text-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                        <div className="space-y-2">
+                            <h3 className="font-semibold text-base mb-2">Información General</h3>
                             <p><strong>Cliente(s):</strong> {orderSummary.clients.join(', ')}</p>
                             <p><strong>Orden(es):</strong> {orderSummary.orderIds.join(', ')}</p>
                             <p><strong>Tamaño Total Lote:</strong> {orderSummary.totalLoteSize} unidades</p>
                         </div>
-                        <div className="md:col-span-2">
-                             <h3 className="font-semibold mb-2">Productos a Producir</h3>
+                        <div className="space-y-2">
+                             <h3 className="font-semibold text-base mb-2">Productos a Producir</h3>
                             <Table>
-                                <TableHeader><TableRow><TableHead>Producto</TableHead><TableHead className="text-right">Cantidad</TableHead></TableRow></TableHeader>
+                                <TableHeader><TableRow><TableHead className="h-8">Producto</TableHead><TableHead className="h-8 text-right">Cantidad</TableHead></TableRow></TableHeader>
                                 <TableBody>
                                     {orderSummary.products.map(p => (
-                                        <TableRow key={p.name}><TableCell>{p.name}</TableCell><TableCell className="text-right">{p.qty}</TableCell></TableRow>
+                                        <TableRow key={p.name}><TableCell className="py-1">{p.name}</TableCell><TableCell className="py-1 text-right">{p.qty}</TableCell></TableRow>
                                     ))}
                                 </TableBody>
                             </Table>
                         </div>
-                        <div>
-                            <h3 className="font-semibold mb-2">Tiempo Total por Actividad (min)</h3>
-                             <Table>
-                                <TableHeader><TableRow><TableHead>Actividad</TableHead><TableHead className="text-right">Tiempo Total</TableHead></TableRow></TableHeader>
-                                <TableBody>
-                                    {orderSummary.timeByActivity.map(a => (
-                                        <TableRow key={a.name}><TableCell>{a.name}</TableCell><TableCell className="text-right">{a.time.toFixed(2)}</TableCell></TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                        <div className="md:col-span-1">
+                            <h3 className="font-semibold text-base mb-2">Tiempo Total por Actividad (min)</h3>
+                             <ChartContainer config={{}} className="min-h-[250px] w-full">
+                                 <BarChart data={orderSummary.timeByActivity} layout="vertical" margin={{left: 120, right: 20}}>
+                                     <CartesianGrid horizontal={false} />
+                                     <XAxis type="number" dataKey="time" />
+                                     <YAxis type="category" dataKey="name" width={120} axisLine={false} tickLine={false} />
+                                     <Tooltip content={<ChartTooltipContent />} />
+                                     <Bar dataKey="time" fill="hsl(var(--primary))" radius={4}>
+                                        <LabelList dataKey="time" position="right" offset={8} className="fill-foreground text-xs" formatter={(value: number) => value.toFixed(0)} />
+                                     </Bar>
+                                 </BarChart>
+                             </ChartContainer>
                         </div>
-                         <div>
-                            <h3 className="font-semibold mb-2">Tiempo Total por Máquina (min)</h3>
-                             <Table>
-                                <TableHeader><TableRow><TableHead>Máquina</TableHead><TableHead className="text-right">Tiempo Total</TableHead></TableRow></TableHeader>
-                                <TableBody>
-                                    {orderSummary.timeByMachine.map(m => (
-                                        <TableRow key={m.name}><TableCell>{m.name}</TableCell><TableCell className="text-right">{m.time.toFixed(2)}</TableCell></TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                         <div className="md:col-span-1">
+                            <h3 className="font-semibold text-base mb-2">Tiempo Total por Máquina (min)</h3>
+                             <ChartContainer config={{}} className="min-h-[250px] w-full">
+                                <BarChart data={orderSummary.timeByMachine} layout="vertical" margin={{left: 100, right: 20}}>
+                                     <CartesianGrid horizontal={false} />
+                                     <XAxis type="number" dataKey="time" />
+                                     <YAxis type="category" dataKey="name" width={100} axisLine={false} tickLine={false} />
+                                     <Tooltip content={<ChartTooltipContent />} />
+                                     <Bar dataKey="time" fill="hsl(var(--primary))" radius={4}>
+                                        <LabelList dataKey="time" position="right" offset={8} className="fill-foreground text-xs" formatter={(value: number) => value.toFixed(0)} />
+                                     </Bar>
+                                 </BarChart>
+                             </ChartContainer>
                         </div>
                     </div>
                 </CardContent>
@@ -531,7 +537,4 @@ export default function ReportsPage() {
   );
 }
 
-
-
-
-
+    
