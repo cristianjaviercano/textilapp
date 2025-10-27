@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -103,7 +102,7 @@ export default function ReportsPage() {
         if(numOperatives > 0) {
             const firstOrderWithStats = relevantOrders.find(o => o.stats && o.stats.length > 0);
             if (firstOrderWithStats?.stats && firstOrderWithStats.stats.length > 0) {
-                 const levelingUnit = firstOrderWithStats.stats[0] ? 60 : 0; 
+                 const levelingUnit = 60; 
                  totalLevelingTime = numOperatives * levelingUnit;
             }
         }
@@ -146,10 +145,10 @@ export default function ReportsPage() {
         
         const makespan = Math.max(0, ...Object.values(operativeTotalTimes));
         const utilization = totalLevelingTime > 0 ? (totalAssignedSam / totalLevelingTime) * 100 : 0;
-        const efficiency = totalRequiredSam > 0 ? (totalRequiredSam / totalAssignedSam) * 100 : 0;
+        const efficiency = totalRequiredSam > 0 && totalAssignedSam > 0 ? (totalRequiredSam / totalAssignedSam) * 100 : 0;
         
         const totalHours = makespan > 0 ? makespan / 60 : 1;
-        const unitsPerHour = totalUnits / totalHours;
+        const unitsPerHour = totalHours > 0 ? totalUnits / totalHours : 0;
 
         const allOperations = Array.from(operationsSet);
         
@@ -157,11 +156,16 @@ export default function ReportsPage() {
             const totalMinutes = operativeTotalTimes[opId] || 0;
             const levelingUnit = totalLevelingTime > 0 ? totalLevelingTime / numOperatives : 0;
             const opUtilization = levelingUnit > 0 ? (totalMinutes / levelingUnit) * 100 : 0;
+            
+            const assignedSamForOperative = operativeTasks[opId].reduce((sum, task) => sum + task.assignedTime, 0);
+            const requiredSamForOperative = operativeTasks[opId].reduce((sum, task) => sum + task.unitSam, 0);
+            const opEfficiency = assignedSamForOperative > 0 ? (requiredSamForOperative / assignedSamForOperative) * 100 : 0;
+
              return {
                 operative: opId,
                 totalMinutes: totalMinutes,
                 utilization: opUtilization,
-                efficiency: 100 // Placeholder
+                efficiency: opEfficiency
             }
         });
 
@@ -316,6 +320,7 @@ export default function ReportsPage() {
                             fill={chartConfig[op]?.color}
                             shape={({ cx, cy, ...props }) => {
                                 const { payload } = props;
+                                if (!payload || !payload.time) return null;
                                 const [start, end] = payload.time;
                                 const xAxis = props.xAxis as any;
                                 const width = xAxis.scale(end) - xAxis.scale(start);
@@ -323,9 +328,9 @@ export default function ReportsPage() {
                                 if(width <= 0) return null;
 
                                 const y = cy - 10;
-                                const x = xAxis.scale(start)
+                                const x = xAxis.scale(start);
 
-                                return <rect x={x} y={y} width={width} height={20} fill={props.fill} />;
+                                return <rect x={x} y={y} width={width} height={20} fill={payload.fill} />;
                             }}
                            />
                         ))}
