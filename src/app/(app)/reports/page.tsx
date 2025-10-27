@@ -33,6 +33,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import initialOrders from "@/data/orders.json";
 import { mockProducts } from '@/data/mock-data';
 import type { ProductionOrder } from "@/lib/types";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 const generateColorFromString = (str: string) => {
     let hash = 0;
@@ -50,15 +51,15 @@ export default function ReportsPage() {
     
     const numSelectedOrders = Object.values(selectedOrders).filter(Boolean).length;
 
-    const { kpis, barChartData, chartConfig, operativeSummary, allOperations, allOperatives } = useMemo(() => {
+    const { kpis, barChartData, chartConfig, operativeSummary, allOperations } = useMemo(() => {
         const activeOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
         if (activeOrderIds.length === 0) {
-            return { kpis: { makespan: 0, utilization: 0, efficiency: 0, unitsPerHour: 0 }, barChartData: [], chartConfig: {}, operativeSummary: [], allOperations: [], allOperatives: [] };
+            return { kpis: { makespan: 0, utilization: 0, efficiency: 0, unitsPerHour: 0 }, barChartData: [], chartConfig: {}, operativeSummary: [], allOperations: [] };
         }
 
         const relevantOrders = orders.filter(o => activeOrderIds.includes(o.id));
         
-        const operativeTasks: Record<string, {taskId: string, assignedTime: number, operationName: string, unitSam: number}[]> = {};
+        const operativeTasks: Record<string, {taskId: string, assignedTime: number, operationName: string, unitSam: number, maquina: string}[]> = {};
         const operationsSet = new Set<string>();
         let totalAssignedSam = 0;
         let totalRequiredSam = 0;
@@ -81,7 +82,8 @@ export default function ReportsPage() {
                           taskId,
                           assignedTime,
                           operationName,
-                          unitSam: productOp.sam
+                          unitSam: productOp.sam,
+                          maquina: productOp.maquina
                         });
                         totalAssignedSam += assignedTime;
                     });
@@ -94,7 +96,7 @@ export default function ReportsPage() {
                 });
             }
         });
-
+        
         const allOperatives = Object.keys(operativeTasks).sort();
         const numOperatives = allOperatives.length;
 
@@ -142,24 +144,10 @@ export default function ReportsPage() {
         
         const newOperativeSummary = allOperatives.map(opId => {
             const totalMinutes = operativeTotalTimes[opId] || 0;
-            const levelingUnit = totalLevelingTime > 0 ? totalLevelingTime / numOperatives : 0;
-            const opUtilization = levelingUnit > 0 ? (totalMinutes / levelingUnit) * 100 : 0;
-            
-            const requiredSamForOperative = (operativeTasks[opId] || []).reduce((sum, task) => {
-                const order = relevantOrders.find(o => o.assignments && o.assignments[task.taskId]);
-                const productDesc = mockProducts.find(p => task.taskId.includes(p.descripcion))?.descripcion;
-                const unitsForTask = (order?.stats || []).find(s => s.descripcion === productDesc)?.unitsPerHour || 0;
-                return sum + task.unitSam * unitsForTask;
-            }, 0);
-            
-            const assignedSamForOperative = operativeTotalTimes[opId];
-            const opEfficiency = requiredSamForOperative > 0 && assignedSamForOperative > 0 ? (requiredSamForOperative / assignedSamForOperative) * 100 : 0;
-
-             return {
+            return {
                 operative: opId,
                 totalMinutes: totalMinutes,
-                utilization: opUtilization,
-                efficiency: opEfficiency
+                tasks: operativeTasks[opId] || [],
             }
         });
 
@@ -174,7 +162,6 @@ export default function ReportsPage() {
             chartConfig: newChartConfig,
             operativeSummary: newOperativeSummary,
             allOperations,
-            allOperatives
         };
 
     }, [selectedOrders, orders]);
@@ -275,7 +262,7 @@ export default function ReportsPage() {
                 </CardHeader>
                 <CardContent>
                   <ChartContainer config={chartConfig} className="min-h-[400px] w-full">
-                    <BarChart layout="vertical" data={barChartData} stackOffset="none">
+                    <BarChart layout="vertical" data={barChartData} stackOffset="none" margin={{ right: 20 }}>
                       <CartesianGrid horizontal={false} />
                       <YAxis
                         dataKey="name"
@@ -283,9 +270,7 @@ export default function ReportsPage() {
                         tickLine={false}
                         axisLine={false}
                       />
-                      <XAxis type="number">
-                        <Label value="Tiempo (minutos)" offset={-10} position="insideBottom" />
-                      </XAxis>
+                      <XAxis type="number" />
                       <Tooltip content={<ChartTooltipContent />} cursor={{fill: 'hsl(var(--muted))'}} />
                       <ChartLegend content={<ChartLegendContent />} />
                       {allOperations.map((op) => (
@@ -302,33 +287,56 @@ export default function ReportsPage() {
             </Card>
 
             <Card>
-                 <CardHeader>
+                <CardHeader>
                     <CardTitle>Resumen de Carga por Operario</CardTitle>
                     <CardDescription>
                         Detalle de la carga de trabajo, utilización y eficiencia por cada operario.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Operario</TableHead>
-                                <TableHead className="text-right">Minutos Asignados</TableHead>
-                                <TableHead className="text-right">Utilización (%)</TableHead>
-                                <TableHead className="text-right">Eficiencia (%)</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {operativeSummary.map(op => (
-                                <TableRow key={op.operative}>
-                                    <TableCell className="font-medium">{op.operative}</TableCell>
-                                    <TableCell className="text-right">{op.totalMinutes.toFixed(2)}</TableCell>
-                                    <TableCell className="text-right">{op.utilization.toFixed(2)}%</TableCell>
-                                    <TableCell className="text-right">{op.efficiency.toFixed(2)}%</TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                    <Accordion type="single" collapsible className="w-full">
+                        {operativeSummary.map(op => (
+                            <AccordionItem value={op.operative} key={op.operative}>
+                                <AccordionTrigger className="text-base font-medium">
+                                    <div className="flex justify-between w-full pr-4">
+                                        <span>{op.operative}</span>
+                                        <span className="text-muted-foreground font-normal">
+                                            {op.tasks.length} actividades asignadas
+                                        </span>
+                                    </div>
+                                </AccordionTrigger>
+                                <AccordionContent>
+                                    <div className="px-1 pb-4">
+                                        <h4 className="font-semibold mb-2">Detalle de las operaciones asignadas:</h4>
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Operación</TableHead>
+                                                    <TableHead>Máquina</TableHead>
+                                                    <TableHead className="text-right">Tiempo Asignado (min)</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {op.tasks.map(task => (
+                                                    <TableRow key={task.taskId}>
+                                                        <TableCell>{task.operationName}</TableCell>
+                                                        <TableCell>{task.maquina}</TableCell>
+                                                        <TableCell className="text-right">{task.assignedTime.toFixed(2)}</TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                            <tfoot className="bg-secondary font-medium">
+                                                <tr>
+                                                    <TableCell colSpan={2} className="text-right font-bold">Tiempo Total Asignado:</TableCell>
+                                                    <TableCell className="text-right font-bold">{op.totalMinutes.toFixed(2)} min</TableCell>
+                                                </tr>
+                                            </tfoot>
+                                        </Table>
+                                    </div>
+                                </AccordionContent>
+                            </AccordionItem>
+                        ))}
+                    </Accordion>
                 </CardContent>
             </Card>
         </>
