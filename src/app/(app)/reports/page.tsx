@@ -52,70 +52,23 @@ const generateColorFromString = (str: string) => {
 };
 
 
-// Componente para el encabezado del PDF
-const PdfHeader = ({ kpis, orderSummary }: { kpis: any, orderSummary: any }) => (
-    <div className="p-8 bg-white">
-        <h1 className="text-2xl font-bold font-headline mb-4">Informe de Producción</h1>
-        <div className="grid gap-4 md:grid-cols-4 mb-4">
-             <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Makespan</CardTitle>
-                    <Clock4 className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-xl font-bold">{kpis.makespan.toFixed(2)} min</div>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Utilización de Personal</CardTitle>
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-xl font-bold">{kpis.personnelUtilization.toFixed(2)}%</div>
-                </CardContent>
-            </Card>
-             <Card className={
-                kpis.deliveryStatus.status === 'A tiempo' ? 'bg-green-50 border-green-200' :
-                kpis.deliveryStatus.status === 'Retrasado' ? 'bg-red-50 border-red-200' : ''
-            }>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Cumplimiento</CardTitle>
-                     {kpis.deliveryStatus.status === 'A tiempo' && <CheckCircle className="h-4 w-4 text-green-600" />}
-                     {kpis.deliveryStatus.status === 'Retrasado' && <AlertTriangle className="h-4 w-4 text-red-600" />}
-                </CardHeader>
-                <CardContent>
-                    <div className={`text-xl font-bold ${
-                        kpis.deliveryStatus.status === 'A tiempo' ? 'text-green-700' : 'text-red-700'
-                    }`}>{kpis.deliveryStatus.status}</div>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Unidades / Día</CardTitle>
-                    <Package className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-xl font-bold">{kpis.unitsPerDay.toFixed(2)}</div>
-                </CardContent>
-            </Card>
-        </div>
+// Componente para el encabezado del PDF por operario
+const PdfOperativeHeader = ({ orderSummary, kpis }: { orderSummary: any, kpis: any }) => (
+    <div className="p-8 pb-4 bg-white">
+        <h1 className="text-2xl font-bold font-headline mb-4">Hoja de Trabajo de Operario</h1>
         <Card>
-            <CardHeader><CardTitle>Resumen de Orden</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-lg">Información de la Orden</CardTitle></CardHeader>
             <CardContent className="text-sm">
-                 <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                    <div>
-                        <p><strong>Cliente(s):</strong> {orderSummary.clients.join(', ')}</p>
-                        <p><strong>Orden(es):</strong> {orderSummary.orderIds.join(', ')}</p>
-                    </div>
-                     <div>
-                        <p><strong>Tamaño Total Lote:</strong> {orderSummary.totalLoteSize} unidades</p>
-                        <p><strong>Fecha Fin Estimada:</strong> {kpis.deliveryStatus.estimatedDate}</p>
-                    </div>
-                </div>
+                 <div className="grid grid-cols-2 gap-x-8 gap-y-2">
+                    <p><strong>Cliente(s):</strong> {orderSummary.clients.join(', ')}</p>
+                    <p><strong>Nº Orden(es):</strong> {orderSummary.orderIds.join(', ')}</p>
+                    <p><strong>Tamaño Lote Total:</strong> {orderSummary.totalLoteSize} unidades</p>
+                    <p><strong>Producto(s):</strong> {orderSummary.products.map((p: any) => `${p.name} (${p.qty})`).join(', ')}</p>
+                    <p><strong>Fecha de Entrega:</strong> {kpis.deliveryStatus.targetDate}</p>
+                 </div>
             </CardContent>
         </Card>
-        <Separator className="my-6" />
+        <h2 className="text-xl font-bold font-headline mt-4 mb-2">Detalle de Actividades</h2>
     </div>
 );
 
@@ -123,7 +76,6 @@ const PdfHeader = ({ kpis, orderSummary }: { kpis: any, orderSummary: any }) => 
 // Componente para el detalle del operario en el PDF
 const PdfOperativeDetail = ({ opId, tasks }: { opId: string, tasks: any[] }) => (
     <div className="p-8 pt-0 bg-white">
-        <h2 className="text-xl font-bold font-headline mb-2">Detalle de Asignación: {opId}</h2>
         <Table>
             <TableHeader>
                 <TableRow>
@@ -151,11 +103,92 @@ const PdfOperativeDetail = ({ opId, tasks }: { opId: string, tasks: any[] }) => 
             </TableBody>
             <TableFooter>
                 <TableRow>
-                    <TableCell colSpan={6} className="text-right font-bold">Tiempo Total Asignado:</TableCell>
+                    <TableCell colSpan={6} className="text-right font-bold">Tiempo Total Asignado a {opId}:</TableCell>
                     <TableCell className="text-right font-bold">{tasks.reduce((sum, task) => sum + task.assignedTime, 0).toFixed(2)} min</TableCell>
                 </TableRow>
             </TableFooter>
         </Table>
+    </div>
+);
+
+// Componente para la primera página del PDF
+const PdfMainReport = ({ kpis, orderSummary, ganttChartData, ganttChartConfig, ganttDomain, operativeYMap, yAxisTickFormatter, activityLoadData }: any) => (
+    <div className="p-8 bg-white" style={{width: '800px'}}>
+        <h1 className="text-3xl font-bold font-headline mb-4">Informe General de Producción</h1>
+        <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+            <p><strong>Cliente(s):</strong> {orderSummary.clients.join(', ')}</p>
+            <p><strong>Fecha de Entrega:</strong> {kpis.deliveryStatus.targetDate}</p>
+            <p><strong>Nº Orden(es):</strong> {orderSummary.orderIds.join(', ')}</p>
+            <p><strong>Fecha de Creación:</strong> {format(new Date(), 'PPP', {locale: es})}</p>
+        </div>
+
+        <Card className="mb-4">
+            <CardHeader><CardTitle>Productos a Fabricar</CardTitle></CardHeader>
+            <CardContent>
+                 <Table>
+                    <TableHeader><TableRow><TableHead>Producto</TableHead><TableHead className="text-right">Cantidad</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                        {orderSummary.products.map((p: any) => (
+                            <TableRow key={p.name}><TableCell>{p.name}</TableCell><TableCell className="text-right">{p.qty}</TableCell></TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+        
+        <div className="grid gap-4 md:grid-cols-4 mb-4">
+             <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Makespan</CardTitle><Clock4 className="h-4 w-4 text-muted-foreground" /></CardHeader>
+                <CardContent><div className="text-xl font-bold">{kpis.makespan.toFixed(2)} min</div></CardContent>
+            </Card>
+             <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Unidades Totales</CardTitle><Package className="h-4 w-4 text-muted-foreground" /></CardHeader>
+                <CardContent><div className="text-xl font-bold">{orderSummary.totalLoteSize}</div></CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Unidades / Día</CardTitle><Package className="h-4 w-4 text-muted-foreground" /></CardHeader>
+                <CardContent><div className="text-xl font-bold">{kpis.unitsPerDay.toFixed(2)}</div></CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Utilización de Personal</CardTitle><Users className="h-4 w-4 text-muted-foreground" /></CardHeader>
+                <CardContent><div className="text-xl font-bold">{kpis.personnelUtilization.toFixed(2)}%</div></CardContent>
+            </Card>
+        </div>
+        <Separator className="my-6" />
+
+         <Card className="mb-4">
+            <CardHeader>
+            <CardTitle>Diagrama de Gantt (Carga Total por Operario)</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <ChartContainer config={ganttChartConfig} className="h-[300px] w-full">
+                    <ScatterChart margin={{ top: 20, right: 20, bottom: 40, left: 20 }}>
+                        <CartesianGrid />
+                        <XAxis type="number" dataKey="x[0]" name="start" label={{ value: "Tiempo (min)", position: 'insideBottom', offset: -10 }} domain={ganttDomain} />
+                        <YAxis type="number" dataKey="y" name="operative" interval={0} ticks={Array.from(operativeYMap.values())} tickFormatter={yAxisTickFormatter} domain={[-1, operativeYMap.size]} label={{ value: 'Operarios', angle: -90, position: 'insideLeft' }} />
+                        <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<ChartTooltipContent labelFormatter={(_, payload) => payload?.[0]?.payload.operative} formatter={(value, name, props) => { if (props.payload.x) { return ( <div className="flex flex-col gap-1 text-xs"> <span className='font-bold'>{props.payload.operationName}</span> <span>Dur: {(props.payload.x[1] - props.payload.x[0]).toFixed(2)} min</span> </div> ); } return null; }} />} />
+                        <Scatter data={ganttChartData} shape={({y, ...props}) => { const {payload, xAxis, yAxis} = props; if (Array.isArray(payload.x) && typeof payload.y === 'number' && payload.x.length === 2 && payload.fill && xAxis && yAxis) { const startX = xAxis.scale(payload.x[0]); const endX = xAxis.scale(payload.x[1]); const width = endX - startX; const yPos = yAxis.scale(payload.y); if (typeof yPos === 'number') { return <Rectangle {...props} x={startX} y={yPos - 5} width={width} height={10} />; } } return null; }} />
+                    </ScatterChart>
+                </ChartContainer>
+            </CardContent>
+        </Card>
+
+        <Card>
+            <CardHeader>
+            <CardTitle>Carga de Actividades por Operario</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <ChartContainer config={{}} className="h-[300px] w-full">
+                <BarChart data={activityLoadData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                    <CartesianGrid vertical={false} />
+                    <XAxis dataKey="name" />
+                    <YAxis allowDecimals={false} label={{ value: 'Nº Actividades', angle: -90, position: 'insideLeft' }} />
+                    <Tooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="actividades" fill="hsl(var(--primary))" radius={4} />
+                </BarChart>
+                </ChartContainer>
+            </CardContent>
+        </Card>
     </div>
 );
 
@@ -191,8 +224,6 @@ export default function ReportsPage() {
             };
         }
         
-        let totalMakespan = 0;
-        let totalUnits = 0;
         const operativesWithAssignments = new Set<string>();
 
         const operativeTasks: Record<string, any[]> = {};
@@ -210,7 +241,6 @@ export default function ReportsPage() {
             orderIds.add(order.id);
 
             order.stats?.forEach(stat => {
-                totalUnits += stat.loteSize;
                 totalLoteSize += stat.loteSize;
 
                 const productOps = mockProducts.filter(p => p.descripcion === stat.descripcion);
@@ -232,7 +262,6 @@ export default function ReportsPage() {
                     if (!productOp) return;
 
                     Object.entries(taskAssignments).forEach(([opId, assignedTime]) => {
-                        totalMakespan += assignedTime;
                         operativesWithAssignments.add(opId);
                         if (!operativeTasks[opId]) operativeTasks[opId] = [];
                         
@@ -268,7 +297,6 @@ export default function ReportsPage() {
         });
 
         let maxTime = 0;
-
         const newOperativeYMap = new Map(sortedOperatives.map((opId, index) => [opId, index]));
 
         sortedOperatives.forEach((opId) => {
@@ -297,7 +325,7 @@ export default function ReportsPage() {
             }
         });
         
-        const calculatedMakespan = totalMakespan;
+        const calculatedMakespan = Object.values(operativeTasks).flat().reduce((sum, task) => sum + task.assignedTime, 0);
         const ganttDomain = [0, maxTime > 0 ? maxTime * 1.05 : 60];
         
         const deliveryDates = relevantOrders.map(o => parseISO(o.fechaEntrega)).sort((a,b) => b.getTime() - a.getTime());
@@ -320,7 +348,7 @@ export default function ReportsPage() {
             };
         }
         
-        const unitsPerDay = productionDays > 0 ? totalUnits / productionDays : 0;
+        const unitsPerDay = productionDays > 0 ? totalLoteSize / productionDays : 0;
 
         const activityLoadData = sortedOperatives.map(opId => ({
             name: opId,
@@ -363,54 +391,78 @@ export default function ReportsPage() {
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const margin = 40;
         const availableWidth = pdfWidth - margin * 2;
-        const mainReportElement = reportRef.current;
-
-        // 1. Render and add the main report page
-        if (mainReportElement) {
-             const canvas = await html2canvas(mainReportElement.querySelector('#pdf-general-report')!, { scale: 2, useCORS: true });
-             const imgData = canvas.toDataURL('image/png');
-             const imgHeight = (canvas.height * availableWidth) / canvas.width;
-             pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, imgHeight);
-        }
-
-        // 2. Render each operative's detail page
+        
         const printContainer = document.createElement('div');
         printContainer.style.position = 'absolute';
         printContainer.style.left = '-9999px';
         printContainer.style.width = '800px';
         document.body.appendChild(printContainer);
 
+        // 1. Render and add the main report page
+        const renderMainReportPromise = new Promise<void>((resolve) => {
+            const root = ReactDOM.createRoot(printContainer);
+            root.render(
+                 <React.StrictMode>
+                     <div className="bg-white text-black">
+                        <PdfMainReport 
+                            kpis={kpis} 
+                            orderSummary={orderSummary}
+                            ganttChartData={ganttChartData}
+                            ganttChartConfig={ganttChartConfig}
+                            ganttDomain={ganttDomain}
+                            operativeYMap={operativeYMap}
+                            yAxisTickFormatter={yAxisTickFormatter}
+                            activityLoadData={activityLoadData}
+                        />
+                     </div>
+                 </React.StrictMode>,
+                 async () => {
+                     await new Promise(r => setTimeout(r, 500)); // Ensure render
+                     try {
+                        const canvas = await html2canvas(printContainer, { scale: 2, useCORS: true, windowWidth: 800 });
+                        const imgData = canvas.toDataURL('image/png');
+                        const imgHeight = (canvas.height * availableWidth) / canvas.width;
+                        pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, imgHeight);
+                    } finally {
+                        root.unmount();
+                        resolve();
+                    }
+                 }
+            )
+        });
+        await renderMainReportPromise;
+
+
+        // 2. Render each operative's detail page
         for (const opId of allOperativesWithTasks) {
             const operativeTasks = operativeSummary.filter(t => t.operative === opId);
             if (operativeTasks.length === 0) continue;
 
             pdf.addPage();
             
-            const renderPromise = new Promise<void>((resolve) => {
+            const renderOperativePromise = new Promise<void>((resolve) => {
                 const root = ReactDOM.createRoot(printContainer);
                 root.render(
                     <React.StrictMode>
                         <div className="bg-white text-black">
-                           <PdfHeader kpis={kpis} orderSummary={orderSummary} />
+                           <PdfOperativeHeader kpis={kpis} orderSummary={orderSummary} />
                            <PdfOperativeDetail opId={opId} tasks={operativeTasks} />
                         </div>
                     </React.StrictMode>
-                , () => {
-                     setTimeout(async () => {
-                        try {
-                            const canvas = await html2canvas(printContainer, { scale: 2, useCORS: true, windowWidth: 800 });
-                            const imgData = canvas.toDataURL('image/png');
-                            const imgHeight = (canvas.height * availableWidth) / canvas.width;
-                            pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, imgHeight);
-                        } finally {
-                            root.unmount();
-                            resolve();
-                        }
-                    }, 200); // Small delay to ensure render completes
+                , async () => {
+                     await new Promise(r => setTimeout(r, 200)); // Ensure render
+                     try {
+                        const canvas = await html2canvas(printContainer, { scale: 2, useCORS: true, windowWidth: 800 });
+                        const imgData = canvas.toDataURL('image/png');
+                        const imgHeight = (canvas.height * availableWidth) / canvas.width;
+                        pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, imgHeight);
+                    } finally {
+                        root.unmount();
+                        resolve();
+                    }
                 });
             });
-
-            await renderPromise;
+            await renderOperativePromise;
         }
 
         document.body.removeChild(printContainer);
@@ -608,7 +660,7 @@ export default function ReportsPage() {
                                 <h3 className="font-semibold text-base mb-2">Información General</h3>
                                 <p><strong>Cliente(s):</strong> {orderSummary.clients.join(', ')}</p>
                                 <p><strong>Orden(es):</strong> {orderSummary.orderIds.join(', ')}</p>
-                                <p><strong>Tamaño Total Lote:</strong> {orderSummary.totalLoteSize} unidades</p>
+                                <p><strong>Tamaño de paquete:</strong> {orderSummary.totalLoteSize} unidades</p>
                             </div>
                             <div className="space-y-2">
                                  <h3 className="font-semibold text-base mb-2">Productos a Producir</h3>
