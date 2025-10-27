@@ -1,6 +1,7 @@
+
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Bar,
   BarChart,
@@ -8,7 +9,8 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  Legend
+  Legend,
+  ResponsiveContainer
 } from 'recharts';
 import {
   Card,
@@ -22,61 +24,113 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import { Button } from '@/components/ui/button';
-import { Download } from 'lucide-react';
+import { Download, ChevronDown } from 'lucide-react';
 import { ChartConfig } from '@/components/ui/chart';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import initialOrders from "@/data/orders.json";
+import type { ProductionOrder } from "@/lib/types";
 
-// This is mock data representing a completed schedule.
-// In a real app, this would come from the assignment results.
-const mockScheduleData = [
-  { task: 'Cortar Tela', operative: 'Op 1', start: 0, end: 550, fill: "var(--color-op1)" },
-  { task: 'Coser Mangas', operative: 'Op 2', start: 0, end: 820, fill: "var(--color-op2)" },
-  { task: 'Unir Cuello', operative: 'Op 3', start: 0, end: 410, fill: "var(--color-op3)" },
-  { task: 'Cortar Denim', operative: 'Op 1', start: 550, end: 900, fill: "var(--color-op1)" },
-  { task: 'Coser Piernas', operative: 'Op 4', start: 0, end: 765, fill: "var(--color-op4)" },
-  { task: 'Añadir Bolsillos', operative: 'Op 5', start: 0, end: 640, fill: "var(--color-op5)" },
-  { task: 'Cortar Tela', operative: 'Op 6', start: 0, end: 450, fill: "var(--color-op6)" },
-  { task: 'Coser Cuerpo', operative: 'Op 7', start: 0, end: 712.5, fill: "var(--color-op7)" },
-  { task: 'Coser Mangas', operative: 'Op 8', start: 0, end: 205, fill: "var(--color-op8)" },
-];
-
-const chartConfig = {
-  op1: { label: 'Op 1', color: 'hsl(var(--chart-1))' },
-  op2: { label: 'Op 2', color: 'hsl(var(--chart-2))' },
-  op3: { label: 'Op 3', color: 'hsl(var(--chart-3))' },
-  op4: { label: 'Op 4', color: 'hsl(var(--chart-4))' },
-  op5: { label: 'Op 5', color: 'hsl(var(--chart-5))' },
-  op6: { label: 'Op 6', color: 'hsl(var(--chart-1))' },
-  op7: { label: 'Op 7', color: 'hsl(var(--chart-2))' },
-  op8: { label: 'Op 8', color: 'hsl(var(--chart-3))' },
-} satisfies ChartConfig;
-
+const operativeColors: { [key: string]: string } = {
+  'Op 1': 'hsl(var(--chart-1))',
+  'Op 2': 'hsl(var(--chart-2))',
+  'Op 3': 'hsl(var(--chart-3))',
+  'Op 4': 'hsl(var(--chart-4))',
+  'Op 5': 'hsl(var(--chart-5))',
+  'Op 6': 'hsl(var(--chart-1))',
+  'Op 7': 'hsl(var(--chart-2))',
+  'Op 8': 'hsl(var(--chart-3))',
+};
 
 export default function ReportsPage() {
+    const [selectedOrders, setSelectedOrders] = useState<Record<string, boolean>>({});
+    const orders = initialOrders as ProductionOrder[];
     
-  const transformedData = useMemo(() => {
-    const dataByTask: { [key: string]: any } = {};
-    mockScheduleData.forEach(item => {
-        if (!dataByTask[item.task]) {
-            dataByTask[item.task] = { task: item.task };
-        }
-        const opKey = item.operative.replace(' ', '').toLowerCase();
-        dataByTask[item.task][opKey] = item.end - item.start;
-    });
-    return Object.values(dataByTask);
-  }, []);
+    const numSelectedOrders = Object.values(selectedOrders).filter(Boolean).length;
 
-  const kpis = useMemo(() => {
-      const makespan = Math.max(...mockScheduleData.map(d => d.end));
-      const totalWorkTime = mockScheduleData.reduce((acc, d) => acc + (d.end - d.start), 0);
-      const totalAvailableTime = 8 * 480; // 8 operatives, 480 min each
-      const utilization = (totalWorkTime / totalAvailableTime) * 100;
-      return {
-          makespan: `${makespan.toFixed(2)} min`,
-          utilization: `${utilization.toFixed(2)}%`,
-          tasks: mockScheduleData.length,
-          operatives: 8,
-      }
-  }, []);
+    const { kpis, operativeLoadData, chartConfig, operativeSummary } = useMemo(() => {
+        const activeOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
+        if (activeOrderIds.length === 0) {
+            return { kpis: { makespan: 0, utilization: 0, efficiency: 0, unitsPerHour: 0 }, operativeLoadData: [], chartConfig: {}, operativeSummary: [] };
+        }
+
+        const relevantOrders = orders.filter(o => activeOrderIds.includes(o.id));
+        
+        const operativeLoads: Record<string, number> = {};
+        let totalAssignedSam = 0;
+        let totalRequiredSam = 0;
+        let totalUnits = 0;
+        let totalLevelingTime = 0;
+
+        // Assuming leveling unit is consistent, taking it from the first available stat.
+        // This is a simplification; a more robust solution would handle this better.
+        const levelingUnit = relevantOrders[0]?.stats?.[0] ? 60 : 0; // Defaulting to 60 if available
+
+        relevantOrders.forEach(order => {
+            if (order.assignments) {
+                Object.values(order.assignments).forEach(taskAssignments => {
+                    Object.entries(taskAssignments).forEach(([opId, assignedTime]) => {
+                        operativeLoads[opId] = (operativeLoads[opId] || 0) + assignedTime;
+                        totalAssignedSam += assignedTime;
+                    });
+                });
+            }
+             if (order.stats) {
+                order.stats.forEach(stat => {
+                    totalRequiredSam += stat.totalSam * stat.loteSize;
+                    totalUnits += stat.loteSize;
+                });
+            }
+        });
+
+        const numOperatives = Object.keys(operativeLoads).length;
+        if(numOperatives > 0 && levelingUnit > 0) {
+           totalLevelingTime = numOperatives * levelingUnit;
+        }
+
+        const makespan = Math.max(0, ...Object.values(operativeLoads));
+        const utilization = totalLevelingTime > 0 ? (totalAssignedSam / totalLevelingTime) * 100 : 0;
+        const efficiency = totalRequiredSam > 0 ? (totalRequiredSam / totalAssignedSam) * 100 : 0;
+        
+        const totalHours = makespan > 0 ? makespan / 60 : 1;
+        const unitsPerHour = totalUnits / totalHours;
+
+        const chartData = Object.entries(operativeLoads).map(([opId, load]) => ({
+          operative: opId,
+          load,
+        }));
+        
+        const newChartConfig: ChartConfig = {};
+        const newOperativeSummary: {operative: string; totalMinutes: number, utilization: number, efficiency: number}[] = [];
+
+        Object.keys(operativeLoads).sort().forEach(opId => {
+            const opKey = opId.replace(' ', '').toLowerCase();
+            newChartConfig[opKey] = { label: opId, color: operativeColors[opId] || 'hsl(var(--chart-1))' };
+
+            const totalMinutes = operativeLoads[opId] || 0;
+            const opUtilization = levelingUnit > 0 ? (totalMinutes / levelingUnit) * 100 : 0;
+            
+            newOperativeSummary.push({
+                operative: opId,
+                totalMinutes: totalMinutes,
+                utilization: opUtilization,
+                efficiency: 100 // Placeholder, as efficiency per operative is more complex
+            })
+        });
+
+        return {
+            kpis: {
+                makespan,
+                utilization,
+                efficiency,
+                unitsPerHour
+            },
+            operativeLoadData: chartData,
+            chartConfig: newChartConfig,
+            operativeSummary: newOperativeSummary
+        };
+
+    }, [selectedOrders, orders]);
 
   return (
     <div className="space-y-6">
@@ -85,98 +139,162 @@ export default function ReportsPage() {
           <h1 className="text-3xl font-bold font-headline">Reportes y Analíticas</h1>
           <p className="text-muted-foreground">Visualizar programaciones e indicadores clave de rendimiento.</p>
         </div>
-        <Button variant="outline" onClick={() => alert("La funcionalidad de exportar a PDF se implementaría aquí.")}>
-          <Download className="mr-2 h-4 w-4" />
-          Exportar a PDF
-        </Button>
+        <div className="flex items-center gap-2">
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline">
+                        <ChevronDown className="mr-2 h-4 w-4" />
+                        Seleccionar Órdenes ({numSelectedOrders})
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                    <DropdownMenuLabel>Órdenes de Producción</DropdownMenuLabel>
+                    <DropdownMenuSeparator/>
+                    {orders.map(order => (
+                        <DropdownMenuCheckboxItem
+                            key={order.id}
+                            checked={selectedOrders[order.id] || false}
+                            onCheckedChange={(checked) => {
+                                setSelectedOrders(prev => ({...prev, [order.id]: !!checked}))
+                            }}
+                        >
+                            {order.id} - {order.nombreCliente}
+                        </DropdownMenuCheckboxItem>
+                    ))}
+                </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Button variant="outline" onClick={() => alert("La funcionalidad de exportar a PDF se implementaría aquí.")}>
+            <Download className="mr-2 h-4 w-4" />
+            Exportar a PDF
+            </Button>
+        </div>
       </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Makespan</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{kpis.makespan}</div>
-                    <p className="text-xs text-muted-foreground">Tiempo total para completar todas las tareas</p>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Utilización General</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{kpis.utilization}</div>
-                     <p className="text-xs text-muted-foreground">Basado en {kpis.operatives} operarios</p>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Tareas Totales</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{kpis.tasks}</div>
-                    <p className="text-xs text-muted-foreground">Asignadas a todos los operarios</p>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Operarios</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{kpis.operatives}</div>
-                    <p className="text-xs text-muted-foreground">Incluidos en la programación</p>
-                </CardContent>
-            </Card>
-        </div>
+        {numSelectedOrders === 0 ? (
+            <div className="flex h-96 items-center justify-center rounded-lg border border-dashed text-center">
+                <div>
+                    <h2 className="text-xl font-medium">No hay datos para mostrar</h2>
+                    <p className="text-muted-foreground">Por favor, seleccione una o más órdenes para generar el reporte.</p>
+                </div>
+            </div>
+        ) : (
+        <>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Makespan (Tiempo de Ciclo)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{kpis.makespan.toFixed(2)} min</div>
+                        <p className="text-xs text-muted-foreground">Tiempo máx. para completar tareas asignadas</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Utilización General</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{kpis.utilization.toFixed(2)}%</div>
+                        <p className="text-xs text-muted-foreground">Basado en el tiempo de nivelación</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Eficiencia General</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{kpis.efficiency.toFixed(2)}%</div>
+                        <p className="text-xs text-muted-foreground">SAM requerido vs. SAM asignado</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Unidades / Hora (Est.)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{kpis.unitsPerHour.toFixed(2)}</div>
+                        <p className="text-xs text-muted-foreground">Producción estimada con la carga actual</p>
+                    </CardContent>
+                </Card>
+            </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Simulación de Diagrama de Gantt</CardTitle>
-          <CardDescription>
-            Este gráfico muestra el tiempo total (SAM) asignado a cada tarea, distribuido por operario.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ChartContainer config={chartConfig} className="min-h-[400px] w-full">
-            <BarChart
-              data={transformedData}
-              layout="vertical"
-              stackOffset="expand"
-              margin={{
-                left: 50,
-                right: 20
-              }}
-            >
-              <CartesianGrid horizontal={false} />
-              <YAxis
-                dataKey="task"
-                type="category"
-                tickLine={false}
-                axisLine={false}
-                width={100}
-                tick={{ fill: 'hsl(var(--foreground))' }}
-              />
-              <XAxis 
-                type="number" 
-                tick={{ fill: 'hsl(var(--foreground))' }}
-                domain={[0, 'dataMax + 100']}
-              />
-              <Tooltip content={<ChartTooltipContent />} />
-              <Legend />
-              {Object.keys(chartConfig).map(key => (
-                  <Bar 
-                    key={key} 
-                    dataKey={key} 
-                    stackId="a" 
-                    fill={chartConfig[key as keyof typeof chartConfig].color} 
-                    radius={[4, 4, 4, 4]}
-                    />
-              ))}
-            </BarChart>
-          </ChartContainer>
-        </CardContent>
-      </Card>
+            <Card>
+                <CardHeader>
+                <CardTitle>Diagrama de Gantt de Carga por Operario</CardTitle>
+                <CardDescription>
+                    Este gráfico muestra el tiempo total (en minutos) asignado a cada operario para las órdenes seleccionadas.
+                </CardDescription>
+                </CardHeader>
+                <CardContent>
+                <ChartContainer config={chartConfig} className="min-h-[400px] w-full">
+                    <BarChart
+                        data={operativeLoadData}
+                        layout="vertical"
+                        margin={{ left: 10 }}
+                    >
+                        <CartesianGrid horizontal={false} />
+                        <YAxis
+                            dataKey="operative"
+                            type="category"
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: 'hsl(var(--foreground))' }}
+                        />
+                        <XAxis 
+                            type="number" 
+                            tick={{ fill: 'hsl(var(--foreground))' }}
+                            domain={[0, 'dataMax + 20']}
+                        />
+                        <Tooltip content={<ChartTooltipContent />} cursor={{fill: 'hsl(var(--muted))'}} />
+                        <Legend content={() => null} />
+                        <Bar 
+                            dataKey="load" 
+                            name="Carga (min)"
+                            radius={[4, 4, 4, 4]}
+                        >
+                             {operativeLoadData.map((entry, index) => (
+                                <YAxis key={`cell-${index}`} fill={operativeColors[entry.operative] || '#8884d8'} />
+                            ))}
+                        </Bar>
+                    </BarChart>
+                </ChartContainer>
+                </CardContent>
+            </Card>
+
+            <Card>
+                 <CardHeader>
+                    <CardTitle>Resumen de Carga por Operario</CardTitle>
+                    <CardDescription>
+                        Detalle de la carga de trabajo, utilización y eficiencia por cada operario.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Operario</TableHead>
+                                <TableHead className="text-right">Minutos Asignados</TableHead>
+                                <TableHead className="text-right">Utilización (%)</TableHead>
+                                <TableHead className="text-right">Eficiencia (%)</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {operativeSummary.map(op => (
+                                <TableRow key={op.operative}>
+                                    <TableCell className="font-medium">{op.operative}</TableCell>
+                                    <TableCell className="text-right">{op.totalMinutes.toFixed(2)}</TableCell>
+                                    <TableCell className="text-right">{op.utilization.toFixed(2)}%</TableCell>
+                                    <TableCell className="text-right">{op.efficiency.toFixed(2)}%</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+        </>
+      )}
     </div>
   );
 }
+
