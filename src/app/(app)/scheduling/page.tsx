@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,39 +10,41 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { mockProducts } from '@/data/mock-data';
 import type { Task, ProductionOrder, Product, ProductStats } from '@/lib/types';
-import { ArrowRight, Calculator } from 'lucide-react';
+import { ArrowRight, Loader2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import initialOrders from "@/data/orders.json";
+import { saveOrdersData } from '../orders/actions';
+import { useToast } from '@/hooks/use-toast';
 
-
-const SCHEDULING_STATS_KEY = 'schedulingInitialStats';
 const SCHEDULING_PARAMS_KEY = 'schedulingParams';
 
 export default function SchedulingPage() {
   const router = useRouter();
+  const { toast } = useToast();
+  const [isSaving, startSaving] = useTransition();
+
   const [numOperatives, setNumOperatives] = useState(8);
   const [workTime, setWorkTime] = useState(480);
   const [levelingUnit, setLevelingUnit] = useState(60);
   const [packageSize, setPackageSize] = useState(10);
   const [selectedOrders, setSelectedOrders] = useState<Record<string, boolean>>({});
-  const [availableOrders, setAvailableOrders] = useState<ProductionOrder[]>(initialOrders);
+  const [availableOrders] = useState<ProductionOrder[]>(initialOrders);
   const [initialStats, setInitialStats] = useState<ProductStats[]>([]);
 
   useEffect(() => {
-    // No longer need to load from localStorage, as we import from JSON
-    
-    const storedStats = localStorage.getItem(SCHEDULING_STATS_KEY);
-    if (storedStats) {
-      setInitialStats(JSON.parse(storedStats));
-    }
     const storedParams = localStorage.getItem(SCHEDULING_PARAMS_KEY);
     if (storedParams) {
-      const { numOperatives, workTime, levelingUnit, packageSize, selectedOrders } = JSON.parse(storedParams);
-      setNumOperatives(numOperatives);
-      setWorkTime(workTime);
-      setLevelingUnit(levelingUnit);
-      setPackageSize(packageSize);
-      setSelectedOrders(selectedOrders);
+      try {
+        const { numOperatives, workTime, levelingUnit, packageSize, selectedOrders } = JSON.parse(storedParams);
+        setNumOperatives(numOperatives);
+        setWorkTime(workTime);
+        setLevelingUnit(levelingUnit);
+        setPackageSize(packageSize);
+        setSelectedOrders(selectedOrders);
+      } catch(e) {
+        console.error("Failed to parse scheduling params from localStorage", e);
+        localStorage.removeItem(SCHEDULING_PARAMS_KEY);
+      }
     }
   }, []);
 
@@ -96,7 +98,6 @@ export default function SchedulingPage() {
     const selectedOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
     if (selectedOrderIds.length === 0) {
       setInitialStats([]);
-      localStorage.removeItem(SCHEDULING_STATS_KEY);
       return;
     }
 
@@ -110,7 +111,6 @@ export default function SchedulingPage() {
           if (productOps.length > 0) {
             const productDesc = productOps[0].descripcion;
             if (!stats[productDesc]) {
-              // Calculate totalSam for the product only once
               const uniqueProductOps = Array.from(new Set(mockProducts.filter(p => p.descripcion === productDesc).map(op => op.id)))
                 .map(id => mockProducts.find(op => op.id === id)!);
               const totalSam = uniqueProductOps.reduce((acc, op) => acc + op.sam, 0);
@@ -135,7 +135,6 @@ export default function SchedulingPage() {
     });
     
     setInitialStats(calculatedStats);
-    localStorage.setItem(SCHEDULING_STATS_KEY, JSON.stringify(calculatedStats));
   }, [selectedOrders, availableOrders, numOperatives, levelingUnit, workTime, packageSize]);
 
 
@@ -144,36 +143,46 @@ export default function SchedulingPage() {
   };
 
   const handleLevelJobs = async () => {
-    const selectedOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
-    
-    const updatedOrders = availableOrders.map(order => {
-      if (selectedOrderIds.includes(order.id)) {
-        // Filter stats relevant to this order's items
-        const orderProducts = new Set(order.items.map(item => mockProducts.find(p => p.referencia === item.referencia)?.descripcion));
-        const relevantStats = initialStats.filter(stat => orderProducts.has(stat.descripcion));
-        return { ...order, stats: relevantStats };
-      }
-      return order;
-    });
-    
-    localStorage.setItem('productionOrders', JSON.stringify(updatedOrders));
+    startSaving(async () => {
+      const selectedOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
+      
+      const updatedOrders = availableOrders.map(order => {
+        if (selectedOrderIds.includes(order.id)) {
+          const orderProducts = new Set(order.items.map(item => mockProducts.find(p => p.referencia === item.referencia)?.descripcion));
+          const relevantStats = initialStats.filter(stat => orderProducts.has(stat.descripcion));
+          return { ...order, stats: relevantStats };
+        }
+        // Return a version of the order without stats if it's not selected
+        const { stats, ...orderWithoutStats } = order;
+        return orderWithoutStats;
+      });
 
-    const schedulingData = {
-      operatives: Array.from({ length: numOperatives }, (_, i) => ({
-        id: `Op ${i + 1}`,
-        availableTime: workTime,
-      })),
-      tasks: tasksToSchedule,
-      levelingUnit: levelingUnit,
-      packageSize: packageSize,
-      unitsPerHour: initialStats.reduce((acc, stat) => {
-        acc[stat.descripcion] = stat.unitsPerHour;
-        return acc;
-      }, {} as Record<string, number>),
-    };
-    
-    localStorage.setItem('schedulingData', JSON.stringify(schedulingData));
-    router.push('/scheduling/assignment');
+      const result = await saveOrdersData(updatedOrders);
+
+      if (result.success) {
+        const schedulingData = {
+          operatives: Array.from({ length: numOperatives }, (_, i) => ({
+            id: `Op ${i + 1}`,
+            availableTime: workTime,
+          })),
+          tasks: tasksToSchedule,
+          levelingUnit: levelingUnit,
+          packageSize: packageSize,
+          unitsPerHour: initialStats.reduce((acc, stat) => {
+            acc[stat.descripcion] = stat.unitsPerHour;
+            return acc;
+          }, {} as Record<string, number>),
+        };
+        localStorage.setItem('schedulingData', JSON.stringify(schedulingData));
+        router.push('/scheduling/assignment');
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error al guardar",
+          description: result.error || "No se pudieron guardar las estadísticas de la orden."
+        })
+      }
+    });
   };
 
   const isAnyOrderSelected = Object.values(selectedOrders).some(v => v);
@@ -292,8 +301,9 @@ export default function SchedulingPage() {
                 </TableBody>
               </Table>
             </div>
-            <Button className="w-full" disabled={!isAnyOrderSelected} onClick={handleLevelJobs}>
-                Nivelar Trabajos <ArrowRight className="ml-2 h-4 w-4" />
+            <Button className="w-full" disabled={!isAnyOrderSelected || isSaving} onClick={handleLevelJobs}>
+                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Nivelar Trabajos"}
+                {!isSaving && <ArrowRight className="ml-2 h-4 w-4" />}
             </Button>
           </CardContent>
         </Card>

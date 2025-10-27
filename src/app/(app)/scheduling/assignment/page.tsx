@@ -32,7 +32,7 @@ export default function AssignmentPage() {
   const [assignments, setAssignments] = useState<AssignmentData>({});
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useTransition();
+  const [isSaving, startSaving] = useTransition();
 
   useEffect(() => {
     let storedData: string | null = null;
@@ -50,6 +50,17 @@ export default function AssignmentPage() {
             parsedData.unitsPerHour = {};
           }
           setData(parsedData);
+
+          // Load existing assignments for these orders
+          const orderIds = new Set(parsedData.tasks.map(t => t.orderId));
+          const loadedAssignments: AssignmentData = {};
+          initialOrders.forEach(order => {
+            if (orderIds.has(order.id) && order.assignments) {
+              Object.assign(loadedAssignments, order.assignments);
+            }
+          });
+          setAssignments(loadedAssignments);
+
         } else {
           throw new Error("Invalid data structure");
         }
@@ -241,7 +252,7 @@ export default function AssignmentPage() {
         return;
     }
 
-    setIsSaving(async () => {
+    startSaving(async () => {
         try {
             const orderIdsInSchedule = [...new Set(data.tasks.map(t => t.orderId))];
             
@@ -350,6 +361,7 @@ export default function AssignmentPage() {
                       </TableHeader>
                       <TableBody>
                         {tasksByProduct[productName]
+                         .sort((a, b) => a.consecutivo - b.consecutivo)
                          .map((task, index) => {
                           const unitsPerHour = data.unitsPerHour?.[task.productDescription] || 0;
                           const requiredSam = task.unitSam * unitsPerHour;
@@ -358,7 +370,7 @@ export default function AssignmentPage() {
                           const timePerPackage = task.unitSam * data.packageSize;
                           return (
                             <TableRow key={task.id}>
-                              <TableCell className="sticky left-0 bg-card z-10 font-medium text-center w-[60px]">{index + 1}</TableCell>
+                              <TableCell className="sticky left-0 bg-card z-10 font-medium text-center w-[60px]">{task.consecutivo}</TableCell>
                               <TableCell className="sticky left-16 bg-card z-10 font-medium w-[250px]">
                                 <div>{task.operation}</div>
                                 <div className="text-xs text-muted-foreground">{task.orderId}</div>
@@ -385,8 +397,7 @@ export default function AssignmentPage() {
                       </TableBody>
                         <TableFooter>
                            <TableRow className="bg-secondary/70 hover:bg-secondary/70 font-bold">
-                              <TableCell colSpan={2} className="sticky left-0 bg-secondary/70 z-10">Totales</TableCell>
-                              <TableCell className="text-center">{summaryTotals.totalsByProduct[productName]?.totalTasks || 0}</TableCell>
+                              <TableCell colSpan={3} className="sticky left-0 bg-secondary/70 z-10 text-right">Totales</TableCell>
                               <TableCell className="text-right">{summaryTotals.totalsByProduct[productName]?.totalUnitSam.toFixed(2) || '0.00'}</TableCell>
                               <TableCell className="text-right">{summaryTotals.totalsByProduct[productName]?.totalPackageTime.toFixed(2) || '0.00'}</TableCell>
                               <TableCell className="text-right">{summaryTotals.totalsByProduct[productName]?.totalRequiredSam.toFixed(2) || '0.00'}</TableCell>
