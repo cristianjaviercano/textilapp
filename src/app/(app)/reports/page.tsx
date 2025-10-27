@@ -66,6 +66,7 @@ export default function ReportsPage() {
         operativeSummary,
         orderSummary,
         allOperativesWithTasks,
+        operativeYMap
     } = useMemo(() => {
         if (activeOrderIds.length === 0) {
             return {
@@ -73,6 +74,7 @@ export default function ReportsPage() {
               ganttChartData: [], ganttChartConfig: {}, ganttDomain: [0, 60], activityLoadData: [], operativeSummary: [],
               orderSummary: { clients: [], orderIds: [], products: [], totalLoteSize: 0, timeByActivity: [], timeByMachine: [] },
               allOperativesWithTasks: [],
+              operativeYMap: new Map()
             };
         }
         
@@ -94,9 +96,7 @@ export default function ReportsPage() {
             clients.add(order.nombreCliente);
             orderIds.add(order.id);
 
-            let orderMakespan = 0;
             order.stats?.forEach(stat => {
-                orderMakespan += stat.totalSam * stat.loteSize;
                 totalUnits += stat.loteSize;
                 totalLoteSize += stat.loteSize;
 
@@ -107,8 +107,6 @@ export default function ReportsPage() {
                     timeByMachine[op.maquina] = (timeByMachine[op.maquina] || 0) + time;
                 });
             });
-            totalMakespan += orderMakespan;
-
 
             order.items.forEach(item => {
                 const desc = mockProducts.find(p => p.referencia === item.referencia)?.descripcion || 'N/A';
@@ -121,6 +119,7 @@ export default function ReportsPage() {
                     if (!productOp) return;
 
                     Object.entries(taskAssignments).forEach(([opId, assignedTime]) => {
+                        totalMakespan += assignedTime;
                         operativesWithAssignments.add(opId);
                         if (!operativeTasks[opId]) operativeTasks[opId] = [];
                         
@@ -155,20 +154,27 @@ export default function ReportsPage() {
         });
 
         let maxTime = 0;
+
+        const newOperativeYMap = new Map(sortedOperatives.map((opId, index) => [opId, index]));
+
         sortedOperatives.forEach((opId) => {
             let currentTime = 0;
             const tasks = (operativeTasks[opId] || []).sort((a, b) => a.consecutivo - b.consecutivo);
+            const yValue = newOperativeYMap.get(opId);
+
             tasks.forEach(task => {
                 const startTime = currentTime;
                 const endTime = startTime + task.assignedTime;
                 
-                ganttData.push({
-                    x: [startTime, endTime],
-                    y: opId,
-                    operative: opId,
-                    operationName: task.operationName,
-                    fill: newGanttConfig[task.operationName]?.color
-                });
+                if (yValue !== undefined) {
+                    ganttData.push({
+                        x: [startTime, endTime],
+                        y: yValue,
+                        operative: opId,
+                        operationName: task.operationName,
+                        fill: newGanttConfig[task.operationName]?.color
+                    });
+                }
                 
                 currentTime = endTime;
             });
@@ -225,9 +231,15 @@ export default function ReportsPage() {
             operativeSummary: newOperativeSummary,
             orderSummary: finalOrderSummary,
             allOperativesWithTasks: sortedOperatives,
+            operativeYMap: newOperativeYMap,
         };
 
     }, [activeOrderIds, relevantOrders]);
+    
+    const yAxisTickFormatter = (value: number) => {
+        const entry = Array.from(operativeYMap.entries()).find(([_, index]) => index === value);
+        return entry ? entry[0] : '';
+    };
 
   return (
     <div className="space-y-8">
@@ -345,7 +357,7 @@ export default function ReportsPage() {
                         <ScatterChart margin={{ top: 20, right: 40, bottom: 20, left: 20 }}>
                           <CartesianGrid />
                           <XAxis type="number" dataKey="x[0]" name="start" label={{ value: "Tiempo (min)", position: 'insideBottom', offset: -10 }} domain={ganttDomain} />
-                          <YAxis type="category" dataKey="y" name="operative" interval={0} ticks={allOperativesWithTasks} label={{ value: 'Operarios', angle: -90, position: 'insideLeft' }} />
+                          <YAxis type="number" dataKey="y" name="operative" interval={0} ticks={Array.from(operativeYMap.values())} tickFormatter={yAxisTickFormatter} domain={[-1, operativeYMap.size]} label={{ value: 'Operarios', angle: -90, position: 'insideLeft' }} />
                           <Tooltip cursor={{ strokeDasharray: '3 3' }} content={
                               <ChartTooltipContent
                                   className="w-[200px]"
@@ -367,16 +379,17 @@ export default function ReportsPage() {
                               />
                             }
                           />
-                          <Scatter data={ganttChartData} shape={({x, y, ...props}) => {
-                              const {payload} = props;
-                              if (Array.isArray(payload.x) && typeof y === 'number' && payload.x.length === 2 && payload.fill) {
-                                  const [x_start, x_end] = payload.x;
+                           <Scatter data={ganttChartData} shape={({y, ...props}) => {
+                              const {payload, xAxis, yAxis} = props;
+                              if (Array.isArray(payload.x) && typeof payload.y === 'number' && payload.x.length === 2 && payload.fill && xAxis && yAxis) {
+                                  const startX = xAxis.scale(payload.x[0]);
+                                  const endX = xAxis.scale(payload.x[1]);
+                                  const width = endX - startX;
                                   
-                                  if (props.xAxis?.scale) {
-                                      const startX = props.xAxis.scale(x_start);
-                                      const endX = props.xAxis.scale(x_end);
-                                      const width = endX - startX;
-                                      return <Rectangle {...props} x={startX} y={y - 5} width={width} height={10} />;
+                                  const yPos = yAxis.scale(payload.y);
+                                  
+                                  if (typeof yPos === 'number') {
+                                    return <Rectangle {...props} x={startX} y={yPos - 5} width={width} height={10} />;
                                   }
                               }
                               return null;
@@ -516,6 +529,7 @@ export default function ReportsPage() {
     </div>
   );
 }
+
 
 
 
