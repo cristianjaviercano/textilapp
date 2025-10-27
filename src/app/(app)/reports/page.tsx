@@ -9,7 +9,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
   ScatterChart,
   Scatter,
   Rectangle,
@@ -129,6 +128,7 @@ export default function ReportsPage() {
                           orderId: order.id,
                           client: order.nombreCliente,
                           deliveryDate: order.fechaEntrega,
+                          productRef: productOp.referencia,
                           product: productOp.descripcion,
                           loteSize: order.stats?.find(s => s.descripcion === productOp.descripcion)?.loteSize || 0,
                           assignedTime,
@@ -183,7 +183,7 @@ export default function ReportsPage() {
             }
         });
         
-        const ganttDomain = [0, totalMakespan > 0 ? totalMakespan : (Math.ceil(maxTime / 10) * 10 || 60)];
+        const ganttDomain = [0, totalMakespan > 0 ? maxTime * 1.05 : 60];
         
         const deliveryDates = relevantOrders.map(o => parseISO(o.fechaEntrega)).sort((a,b) => b.getTime() - a.getTime());
         const latestDeliveryDate = deliveryDates[0];
@@ -354,12 +354,12 @@ export default function ReportsPage() {
                     </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <ChartContainer config={ganttChartConfig} className="min-h-[400px] w-full">
+                       <ChartContainer config={ganttChartConfig} className="h-[400px] w-full">
                         <ScatterChart margin={{ top: 20, right: 40, bottom: 20, left: 20 }}>
                           <CartesianGrid />
                           <XAxis type="number" dataKey="x[0]" name="start" label={{ value: "Tiempo (min)", position: 'insideBottom', offset: -10 }} domain={ganttDomain} />
                           <YAxis type="number" dataKey="y" name="operative" interval={0} ticks={Array.from(operativeYMap.values())} tickFormatter={yAxisTickFormatter} domain={[-1, operativeYMap.size]} label={{ value: 'Operarios', angle: -90, position: 'insideLeft' }} />
-                          <Tooltip cursor={{ strokeDasharray: '3 3' }} content={
+                           <Tooltip cursor={{ strokeDasharray: '3 3' }} content={
                               <ChartTooltipContent
                                   className="w-[200px]"
                                   labelFormatter={(value, payload) => payload[0]?.payload.operative}
@@ -407,7 +407,7 @@ export default function ReportsPage() {
                     </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <ChartContainer config={{}} className="min-h-[400px] w-full">
+                      <ChartContainer config={{}} className="h-[400px] w-full">
                         <BarChart data={activityLoadData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                           <CartesianGrid vertical={false} />
                           <XAxis dataKey="name" />
@@ -444,7 +444,7 @@ export default function ReportsPage() {
                         </div>
                         <div className="md:col-span-1">
                             <h3 className="font-semibold text-base mb-2">Tiempo Total por Actividad (min)</h3>
-                             <ChartContainer config={{}} className="min-h-[250px] w-full">
+                             <ChartContainer config={{}} className="h-[250px] w-full">
                                  <BarChart data={orderSummary.timeByActivity} layout="vertical" margin={{left: 120, right: 20}}>
                                      <CartesianGrid horizontal={false} />
                                      <XAxis type="number" dataKey="time" />
@@ -458,7 +458,7 @@ export default function ReportsPage() {
                         </div>
                          <div className="md:col-span-1">
                             <h3 className="font-semibold text-base mb-2">Tiempo Total por Máquina (min)</h3>
-                             <ChartContainer config={{}} className="min-h-[250px] w-full">
+                             <ChartContainer config={{}} className="h-[250px] w-full">
                                 <BarChart data={orderSummary.timeByMachine} layout="vertical" margin={{left: 100, right: 20}}>
                                      <CartesianGrid horizontal={false} />
                                      <XAxis type="number" dataKey="time" />
@@ -496,11 +496,11 @@ export default function ReportsPage() {
                                             <TableHeader>
                                                 <TableRow>
                                                     <TableHead>Sec</TableHead>
-                                                    <TableHead>Producto</TableHead>
-                                                    <TableHead>Cliente</TableHead>
+                                                    <TableHead>Producto (Ref)</TableHead>
+                                                    <TableHead>Cliente (Orden)</TableHead>
                                                     <TableHead>Operación</TableHead>
                                                     <TableHead>Máquina</TableHead>
-                                                    <TableHead>Lote</TableHead>
+                                                    <TableHead>SAM Unit.</TableHead>
                                                     <TableHead className="text-right">Tiempo Asignado (min)</TableHead>
                                                 </TableRow>
                                             </TableHeader>
@@ -508,11 +508,11 @@ export default function ReportsPage() {
                                                 {operativeSummary.filter(t => t.operative === opId).sort((a,b) => a.consecutivo - b.consecutivo).map((task, index) => (
                                                     <TableRow key={`${task.taskId}-${index}`}>
                                                         <TableCell>{task.consecutivo}</TableCell>
-                                                        <TableCell>{task.product}</TableCell>
-                                                        <TableCell>{task.client}</TableCell>
+                                                        <TableCell><div>{task.product}</div><div className="text-xs text-muted-foreground">{task.productRef}</div></TableCell>
+                                                        <TableCell><div>{task.client}</div><div className="text-xs text-muted-foreground">{task.orderId}</div></TableCell>
                                                         <TableCell>{task.operationName}</TableCell>
                                                         <TableCell>{task.maquina}</TableCell>
-                                                        <TableCell>{task.loteSize}</TableCell>
+                                                        <TableCell>{task.unitSam.toFixed(2)}</TableCell>
                                                         <TableCell className="text-right">{task.assignedTime.toFixed(2)}</TableCell>
                                                     </TableRow>
                                                 ))}
