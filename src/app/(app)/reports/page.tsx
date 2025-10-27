@@ -183,7 +183,7 @@ export default function ReportsPage() {
             }
         });
         
-        const ganttDomain = [0, kpis.makespan > 0 ? kpis.makespan : (Math.ceil(maxTime / 10) * 10 || 60)];
+        const ganttDomain = [0, totalMakespan > 0 ? totalMakespan : (Math.ceil(maxTime / 10) * 10 || 60)];
         
         const deliveryDates = relevantOrders.map(o => parseISO(o.fechaEntrega)).sort((a,b) => b.getTime() - a.getTime());
         const latestDeliveryDate = deliveryDates[0];
