@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   BarChart,
   Bar,
@@ -26,7 +26,7 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import { Button } from '@/components/ui/button';
-import { Download, ChevronDown, CheckCircle, AlertTriangle, Users, Package, Clock4 } from 'lucide-react';
+import { Download, ChevronDown, CheckCircle, AlertTriangle, Users, Package, Clock4, Loader2 } from 'lucide-react';
 import { type ChartConfig } from '@/components/ui/chart';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
@@ -37,6 +37,9 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { addDays, format, parseISO, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+
 
 const generateColorFromString = (str: string) => {
     let hash = 0;
@@ -50,6 +53,8 @@ const generateColorFromString = (str: string) => {
 
 export default function ReportsPage() {
     const [selectedOrders, setSelectedOrders] = useState<Record<string, boolean>>({});
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const reportRef = useRef<HTMLDivElement>(null);
     const orders = initialOrders as ProductionOrder[];
     
     const numSelectedOrders = Object.values(selectedOrders).filter(Boolean).length;
@@ -183,7 +188,7 @@ export default function ReportsPage() {
             }
         });
         
-        const ganttDomain = [0, totalMakespan > 0 ? maxTime * 1.05 : 60];
+        const ganttDomain = [0, maxTime > 0 ? maxTime * 1.05 : 60];
         
         const deliveryDates = relevantOrders.map(o => parseISO(o.fechaEntrega)).sort((a,b) => b.getTime() - a.getTime());
         const latestDeliveryDate = deliveryDates[0];
@@ -242,6 +247,30 @@ export default function ReportsPage() {
         return entry ? entry[0] : '';
     };
 
+    const handleExportPdf = () => {
+        const input = reportRef.current;
+        if (!input) return;
+        
+        setIsGeneratingPdf(true);
+
+        html2canvas(input, {
+          scale: 2, // Aumentar la escala para mejorar la calidad
+          useCORS: true, 
+        }).then(canvas => {
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF({
+                orientation: 'p',
+                unit: 'px',
+                format: [canvas.width, canvas.height]
+            });
+            pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+            pdf.save('reporte-produccion.pdf');
+            setIsGeneratingPdf(false);
+        }).catch(() => {
+            setIsGeneratingPdf(false);
+        });
+    };
+
   return (
     <div className="space-y-8">
       <div className="flex items-start justify-between">
@@ -274,13 +303,13 @@ export default function ReportsPage() {
                 </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button variant="outline" disabled>
-                <Download className="mr-2 h-4 w-4" />
+            <Button onClick={handleExportPdf} disabled={numSelectedOrders === 0 || isGeneratingPdf}>
+                {isGeneratingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
                 Exportar a PDF
             </Button>
         </div>
       </div>
-
+      <div ref={reportRef}>
         {numSelectedOrders === 0 ? (
             <div className="flex h-96 items-center justify-center rounded-lg border border-dashed text-center">
                 <div>
@@ -533,8 +562,7 @@ export default function ReportsPage() {
             </Card>
         </>
       )}
+      </div>
     </div>
   );
 }
-
-    
