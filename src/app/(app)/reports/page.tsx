@@ -399,7 +399,7 @@ export default function ReportsPage() {
         document.body.appendChild(printContainer);
 
         // 1. Render and add the main report page
-        const renderMainReportPromise = new Promise<void>((resolve) => {
+        const renderMainReportPromise = async () => {
             const root = ReactDOM.createRoot(printContainer);
             root.render(
                  <React.StrictMode>
@@ -415,22 +415,19 @@ export default function ReportsPage() {
                             activityLoadData={activityLoadData}
                         />
                      </div>
-                 </React.StrictMode>,
-                 async () => {
-                     await new Promise(r => setTimeout(r, 500)); // Ensure render
-                     try {
-                        const canvas = await html2canvas(printContainer, { scale: 2, useCORS: true, windowWidth: 800 });
-                        const imgData = canvas.toDataURL('image/png');
-                        const imgHeight = (canvas.height * availableWidth) / canvas.width;
-                        pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, imgHeight);
-                    } finally {
-                        root.unmount();
-                        resolve();
-                    }
-                 }
-            )
-        });
-        await renderMainReportPromise;
+                 </React.StrictMode>
+            );
+            await new Promise(r => setTimeout(r, 500)); // Ensure render
+            try {
+                const canvas = await html2canvas(printContainer, { scale: 2, useCORS: true, windowWidth: 800 });
+                const imgData = canvas.toDataURL('image/png');
+                const imgHeight = (canvas.height * availableWidth) / canvas.width;
+                pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, imgHeight);
+            } finally {
+                root.unmount();
+            }
+        };
+        await renderMainReportPromise();
 
 
         // 2. Render each operative's detail page
@@ -440,7 +437,7 @@ export default function ReportsPage() {
 
             pdf.addPage();
             
-            const renderOperativePromise = new Promise<void>((resolve) => {
+            const renderOperativePromise = async () => {
                 const root = ReactDOM.createRoot(printContainer);
                 root.render(
                     <React.StrictMode>
@@ -449,20 +446,18 @@ export default function ReportsPage() {
                            <PdfOperativeDetail opId={opId} tasks={operativeTasks} />
                         </div>
                     </React.StrictMode>
-                , async () => {
-                     await new Promise(r => setTimeout(r, 200)); // Ensure render
-                     try {
-                        const canvas = await html2canvas(printContainer, { scale: 2, useCORS: true, windowWidth: 800 });
-                        const imgData = canvas.toDataURL('image/png');
-                        const imgHeight = (canvas.height * availableWidth) / canvas.width;
-                        pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, imgHeight);
-                    } finally {
-                        root.unmount();
-                        resolve();
-                    }
-                });
-            });
-            await renderOperativePromise;
+                );
+                await new Promise(r => setTimeout(r, 200)); // Ensure render
+                try {
+                    const canvas = await html2canvas(printContainer, { scale: 2, useCORS: true, windowWidth: 800 });
+                    const imgData = canvas.toDataURL('image/png');
+                    const imgHeight = (canvas.height * availableWidth) / canvas.width;
+                    pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, imgHeight);
+                } finally {
+                    root.unmount();
+                }
+            };
+            await renderOperativePromise();
         }
 
         document.body.removeChild(printContainer);
@@ -772,5 +767,7 @@ export default function ReportsPage() {
   );
 }
 
+
+    
 
     
