@@ -90,17 +90,17 @@ export default function SchedulingPage() {
   }, [selectedOrders, availableOrders]);
   
   useEffect(() => {
-    const stats: Record<string, { totalSam: number; loteSize: number, products: Product[] }> = {};
-    const selectedOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
-
     const paramsToStore = { numOperatives, workTime, levelingUnit, packageSize, selectedOrders };
     localStorage.setItem(SCHEDULING_PARAMS_KEY, JSON.stringify(paramsToStore));
-
+    
+    const selectedOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
     if (selectedOrderIds.length === 0) {
       setInitialStats([]);
       localStorage.removeItem(SCHEDULING_STATS_KEY);
       return;
     }
+
+    const stats: Record<string, { totalSam: number; loteSize: number }> = {};
 
     availableOrders
       .filter(order => selectedOrderIds.includes(order.id))
@@ -110,8 +110,11 @@ export default function SchedulingPage() {
           if (productOps.length > 0) {
             const productDesc = productOps[0].descripcion;
             if (!stats[productDesc]) {
-              const totalSam = productOps.reduce((acc, op) => acc + op.sam, 0);
-              stats[productDesc] = { totalSam, loteSize: 0, products: productOps };
+              // Calculate totalSam for the product only once
+              const uniqueProductOps = Array.from(new Set(mockProducts.filter(p => p.descripcion === productDesc).map(op => op.id)))
+                .map(id => mockProducts.find(op => op.id === id)!);
+              const totalSam = uniqueProductOps.reduce((acc, op) => acc + op.sam, 0);
+              stats[productDesc] = { totalSam, loteSize: 0 };
             }
             stats[productDesc].loteSize += item.cantidad;
           }
@@ -130,7 +133,7 @@ export default function SchedulingPage() {
         unitsPerDay: unitsPerHour * workHours
       };
     });
-
+    
     setInitialStats(calculatedStats);
     localStorage.setItem(SCHEDULING_STATS_KEY, JSON.stringify(calculatedStats));
   }, [selectedOrders, availableOrders, numOperatives, levelingUnit, workTime, packageSize]);
@@ -143,17 +146,17 @@ export default function SchedulingPage() {
   const handleLevelJobs = async () => {
     const selectedOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
     
-    const ordersToUpdate = availableOrders.map(order => {
+    const updatedOrders = availableOrders.map(order => {
       if (selectedOrderIds.includes(order.id)) {
-        return { ...order, stats: initialStats };
+        // Filter stats relevant to this order's items
+        const orderProducts = new Set(order.items.map(item => mockProducts.find(p => p.referencia === item.referencia)?.descripcion));
+        const relevantStats = initialStats.filter(stat => orderProducts.has(stat.descripcion));
+        return { ...order, stats: relevantStats };
       }
       return order;
     });
-
-    // We can't call the server action and then save to localStorage,
-    // as the state won't be in sync. The server action should be the source of truth.
-    // For now, we will update the local state and scheduling data.
-    // The save action will be responsible for persistence.
+    
+    localStorage.setItem('productionOrders', JSON.stringify(updatedOrders));
 
     const schedulingData = {
       operatives: Array.from({ length: numOperatives }, (_, i) => ({
