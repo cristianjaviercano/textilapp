@@ -59,7 +59,7 @@ export default function ReportsPage() {
 
         const relevantOrders = orders.filter(o => activeOrderIds.includes(o.id));
         
-        const operativeTasks: Record<string, {taskId: string, assignedTime: number, consecutivo: number, operationName: string}[]> = {};
+        const operativeTasks: Record<string, {taskId: string, assignedTime: number, consecutivo: number, operationName: string, unitSam: number}[]> = {};
         let totalAssignedSam = 0;
         let totalRequiredSam = 0;
         let totalUnits = 0;
@@ -83,6 +83,7 @@ export default function ReportsPage() {
                           assignedTime,
                           consecutivo: productOp.consecutivo,
                           operationName,
+                          unitSam: productOp.sam
                         });
                         totalAssignedSam += assignedTime;
                     });
@@ -124,14 +125,15 @@ export default function ReportsPage() {
           let operativeTotalTime = 0;
 
           operativeTasks[opId].forEach(task => {
+            const taskDuration = task.unitSam;
             const startTime = currentTime;
-            const endTime = startTime + task.assignedTime;
+            const endTime = startTime + taskDuration;
             
             ganttData.push({
               operative: opId,
               operation: task.operationName,
               time: [startTime, endTime],
-              duration: task.assignedTime,
+              duration: taskDuration,
               fill: newChartConfig[task.operationName]?.color || '#8884d8'
             });
             
@@ -141,7 +143,7 @@ export default function ReportsPage() {
           operativeTotalTimes[opId] = operativeTotalTime;
         });
         
-        const makespan = Math.max(0, ...Object.values(operativeTotalTimes));
+        const makespan = Math.max(0, ...ganttData.map(d => d.time[1]));
         const utilization = totalLevelingTime > 0 ? (totalAssignedSam / totalLevelingTime) * 100 : 0;
         const efficiency = totalRequiredSam > 0 ? (totalRequiredSam / totalAssignedSam) * 100 : 0;
         
@@ -187,7 +189,7 @@ export default function ReportsPage() {
             <p>{`Operación: ${data.operation}`}</p>
             <p>{`Inicio: ${data.time[0].toFixed(2)} min`}</p>
             <p>{`Fin: ${data.time[1].toFixed(2)} min`}</p>
-            <p>{`Duración: ${data.duration.toFixed(2)} min`}</p>
+            <p>{`Duración (SAM Unit.): ${data.duration.toFixed(2)} min`}</p>
           </div>
         );
       }
@@ -245,11 +247,11 @@ export default function ReportsPage() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Makespan (Tiempo de Ciclo)</CardTitle>
+                        <CardTitle className="text-sm font-medium">Makespan (Tiempo de Ciclo Unitario)</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{kpis.makespan.toFixed(2)} min</div>
-                        <p className="text-xs text-muted-foreground">Tiempo máx. para completar tareas asignadas</p>
+                        <p className="text-xs text-muted-foreground">Tiempo máx. para completar una unidad</p>
                     </CardContent>
                 </Card>
                 <Card>
@@ -283,9 +285,9 @@ export default function ReportsPage() {
 
             <Card>
                 <CardHeader>
-                <CardTitle>Diagrama de Gantt de Carga por Operario</CardTitle>
+                <CardTitle>Diagrama de Gantt de Carga por Operario (Unitario)</CardTitle>
                 <CardDescription>
-                    Este gráfico muestra la secuencia de operaciones (tareas) asignadas a cada operario a lo largo del tiempo.
+                    Este gráfico muestra la secuencia de operaciones (tareas) para una unidad, asignadas a cada operario a lo largo del tiempo.
                 </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -302,7 +304,7 @@ export default function ReportsPage() {
                         <XAxis type="number" dataKey="time[0]" name="Tiempo" unit=" min" domain={[0, 'dataMax']}>
                           <Label value="Tiempo (minutos)" offset={-10} position="insideBottom" />
                         </XAxis>
-                        <YAxis type="category" dataKey="operative" name="Operario" domain={allOperatives} reversed={true} />
+                        <YAxis type="category" dataKey="operative" name="Operario" domain={allOperatives} reversed={true} interval={0} />
                         <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
                         <Legend content={<ChartLegendContent />} />
                         {allOperations.map((op) => (
@@ -313,12 +315,13 @@ export default function ReportsPage() {
                             shape={({ cx, cy, ...props }) => {
                                 const { payload } = props;
                                 const [start, end] = payload.time;
-                                const width = (end - start) * ( (props.xAxis.width - 10) / props.xAxis.domain[1]);
+                                const xAxis = props.xAxis as any;
+                                const width = xAxis.scale(end) - xAxis.scale(start);
                                 
                                 if(width < 0) return null;
 
                                 const y = cy - 10;
-                                const x = props.xAxis.scale(start)
+                                const x = xAxis.scale(start)
 
                                 return <rect x={x} y={y} width={width} height={20} fill={payload.fill} />;
                             }}
@@ -365,3 +368,4 @@ export default function ReportsPage() {
   );
 }
 
+    
