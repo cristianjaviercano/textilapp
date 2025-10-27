@@ -34,25 +34,14 @@ import initialOrders from "@/data/orders.json";
 import { mockProducts } from '@/data/mock-data';
 import type { ProductionOrder, Product } from "@/lib/types";
 
-const operationColors: { [key: string]: string } = {
-    'CERRAR LADOS 15CM (FILETEADORA)': 'hsl(var(--chart-1))',
-    'FILETEAR RUEDO 100CM RUCHE': 'hsl(var(--chart-2))',
-    'CERRAR LADO 100CM (FIL)': 'hsl(var(--chart-3))',
-    'FIJAR MARQUILLA (PLANA)': 'hsl(var(--chart-4))',
-    'DOBLAR FORMANDO ENCUADRE 5CM LARGO 2 ANCHO': 'hsl(var(--chart-5))',
-    'DOBLADILLAR RUEDO DE FALDA 100CM  (RES 2AG)': 'hsl(var(--chart-1))',
-    'INTRODUCIR PITILLO': 'hsl(var(--chart-2))',
-    'INTRODUCIR CHAQUIRAS Y ANUDAR': 'hsl(var(--chart-3))',
-    'REVISAR PAREO': 'hsl(var(--chart-4))',
-    'ETIQUETAR PRENDA *2': 'hsl(var(--chart-5))',
-    'PEGAR STICKER A BOLSA INDIVIDUAL JADE': 'hsl(var(--chart-1))',
-    'EMPACAR PANTY EN BOLSA INDIVIDUAL': 'hsl(var(--chart-2))',
-    'EMPACAR PANTY EN CAJA GRANDE': 'hsl(var(--chart-3))',
-    'PUNTEAR OJAL': 'hsl(var(--chart-4))',
-    'OJAL': 'hsl(var(--chart-5))',
-    'BOTONAR': 'hsl(var(--chart-1))',
-    'PLANCHADO': 'hsl(var(--chart-2))',
-    'default': 'hsl(var(--chart-3))',
+// Function to generate a color from a string (e.g., operation name)
+const generateColorFromString = (str: string) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hue = hash % 360;
+    return `hsl(${hue}, 70%, 50%)`;
 };
 
 
@@ -135,13 +124,13 @@ export default function ReportsPage() {
             return operativeData;
         });
         
-        const newChartConfig: ChartConfig = {};
-        allOperations.forEach(opName => {
-            newChartConfig[opName] = {
+        const newChartConfig = allOperations.reduce((acc, opName) => {
+            acc[opName] = {
                 label: opName,
-                color: operationColors[opName] || operationColors.default,
+                color: generateColorFromString(opName),
             };
-        });
+            return acc;
+        }, {} as ChartConfig);
         
         const newOperativeSummary = allOperatives.map(opId => {
             const totalMinutes = operativeTotalTimes[opId] || 0;
@@ -334,5 +323,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-    
