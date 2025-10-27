@@ -22,6 +22,8 @@ import {
 import {
   ChartContainer,
   ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent
 } from '@/components/ui/chart';
 import { Button } from '@/components/ui/button';
 import { Download, ChevronDown } from 'lucide-react';
@@ -29,18 +31,30 @@ import { ChartConfig } from '@/components/ui/chart';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import initialOrders from "@/data/orders.json";
-import type { ProductionOrder } from "@/lib/types";
+import { mockProducts } from '@/data/mock-data';
+import type { ProductionOrder, Product } from "@/lib/types";
 
-const operativeColors: { [key: string]: string } = {
-  'Op 1': 'hsl(var(--chart-1))',
-  'Op 2': 'hsl(var(--chart-2))',
-  'Op 3': 'hsl(var(--chart-3))',
-  'Op 4': 'hsl(var(--chart-4))',
-  'Op 5': 'hsl(var(--chart-5))',
-  'Op 6': 'hsl(var(--chart-1))',
-  'Op 7': 'hsl(var(--chart-2))',
-  'Op 8': 'hsl(var(--chart-3))',
+const operationColors: { [key: string]: string } = {
+    'CERRAR LADOS 15CM (FILETEADORA)': 'hsl(var(--chart-1))',
+    'FILETEAR RUEDO 100CM RUCHE': 'hsl(var(--chart-2))',
+    'CERRAR LADO 100CM (FIL)': 'hsl(var(--chart-3))',
+    'FIJAR MARQUILLA (PLANA)': 'hsl(var(--chart-4))',
+    'DOBLAR FORMANDO ENCUADRE 5CM LARGO 2 ANCHO': 'hsl(var(--chart-5))',
+    'DOBLADILLAR RUEDO DE FALDA 100CM  (RES 2AG)': 'hsl(var(--chart-1))',
+    'INTRODUCIR PITILLO': 'hsl(var(--chart-2))',
+    'INTRODUCIR CHAQUIRAS Y ANUDAR': 'hsl(var(--chart-3))',
+    'REVISAR PAREO': 'hsl(var(--chart-4))',
+    'ETIQUETAR PRENDA *2': 'hsl(var(--chart-5))',
+    'PEGAR STICKER A BOLSA INDIVIDUAL JADE': 'hsl(var(--chart-1))',
+    'EMPACAR PANTY EN BOLSA INDIVIDUAL': 'hsl(var(--chart-2))',
+    'EMPACAR PANTY EN CAJA GRANDE': 'hsl(var(--chart-3))',
+    'PUNTEAR OJAL': 'hsl(var(--chart-4))',
+    'OJAL': 'hsl(var(--chart-5))',
+    'BOTONAR': 'hsl(var(--chart-1))',
+    'PLANCHADO': 'hsl(var(--chart-2))',
+    'default': 'hsl(var(--chart-3))',
 };
+
 
 export default function ReportsPage() {
     const [selectedOrders, setSelectedOrders] = useState<Record<string, boolean>>({});
@@ -48,29 +62,34 @@ export default function ReportsPage() {
     
     const numSelectedOrders = Object.values(selectedOrders).filter(Boolean).length;
 
-    const { kpis, operativeLoadData, chartConfig, operativeSummary } = useMemo(() => {
+    const { kpis, operativeLoadData, chartConfig, operativeSummary, allOperations } = useMemo(() => {
         const activeOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
         if (activeOrderIds.length === 0) {
-            return { kpis: { makespan: 0, utilization: 0, efficiency: 0, unitsPerHour: 0 }, operativeLoadData: [], chartConfig: {}, operativeSummary: [] };
+            return { kpis: { makespan: 0, utilization: 0, efficiency: 0, unitsPerHour: 0 }, operativeLoadData: [], chartConfig: {}, operativeSummary: [], allOperations: [] };
         }
 
         const relevantOrders = orders.filter(o => activeOrderIds.includes(o.id));
         
-        const operativeLoads: Record<string, number> = {};
+        const operativeLoads: Record<string, Record<string, number>> = {};
         let totalAssignedSam = 0;
         let totalRequiredSam = 0;
         let totalUnits = 0;
         let totalLevelingTime = 0;
-
-        // Assuming leveling unit is consistent, taking it from the first available stat.
-        // This is a simplification; a more robust solution would handle this better.
-        const levelingUnit = relevantOrders[0]?.stats?.[0] ? 60 : 0; // Defaulting to 60 if available
+        const operationsSet = new Set<string>();
 
         relevantOrders.forEach(order => {
             if (order.assignments) {
-                Object.values(order.assignments).forEach(taskAssignments => {
+                 Object.entries(order.assignments).forEach(([taskId, taskAssignments]) => {
+                    const productOp = mockProducts.find(p => taskId.endsWith(p.id));
+                    if (!productOp) return;
+                    const operationName = productOp.operacion;
+                    operationsSet.add(operationName);
+
                     Object.entries(taskAssignments).forEach(([opId, assignedTime]) => {
-                        operativeLoads[opId] = (operativeLoads[opId] || 0) + assignedTime;
+                        if (!operativeLoads[opId]) {
+                            operativeLoads[opId] = {};
+                        }
+                        operativeLoads[opId][operationName] = (operativeLoads[opId][operationName] || 0) + assignedTime;
                         totalAssignedSam += assignedTime;
                     });
                 });
@@ -83,39 +102,57 @@ export default function ReportsPage() {
             }
         });
 
-        const numOperatives = Object.keys(operativeLoads).length;
-        if(numOperatives > 0 && levelingUnit > 0) {
-           totalLevelingTime = numOperatives * levelingUnit;
-        }
+        const allOperatives = Object.keys(operativeLoads).sort();
+        const numOperatives = allOperatives.length;
 
-        const makespan = Math.max(0, ...Object.values(operativeLoads));
+        if(numOperatives > 0) {
+            const firstOrderWithStats = relevantOrders.find(o => o.stats && o.stats.length > 0);
+            if (firstOrderWithStats?.stats) {
+                 const levelingUnit = firstOrderWithStats.stats[0] ? 60 : 0; // Defaulting to 60 if available
+                 totalLevelingTime = numOperatives * levelingUnit;
+            }
+        }
+        
+        const operativeTotalTimes = Object.entries(operativeLoads).reduce((acc, [opId, opLoads]) => {
+            acc[opId] = Object.values(opLoads).reduce((sum, time) => sum + time, 0);
+            return acc;
+        }, {} as Record<string, number>);
+
+        const makespan = Math.max(0, ...Object.values(operativeTotalTimes));
         const utilization = totalLevelingTime > 0 ? (totalAssignedSam / totalLevelingTime) * 100 : 0;
         const efficiency = totalRequiredSam > 0 ? (totalRequiredSam / totalAssignedSam) * 100 : 0;
         
         const totalHours = makespan > 0 ? makespan / 60 : 1;
         const unitsPerHour = totalUnits / totalHours;
 
-        const chartData = Object.entries(operativeLoads).map(([opId, load]) => ({
-          operative: opId,
-          load,
-        }));
+        const allOperations = Array.from(operationsSet);
+        
+        const chartData = allOperatives.map(opId => {
+            const operativeData: { [key: string]: string | number } = { operative: opId };
+            allOperations.forEach(opName => {
+                operativeData[opName] = operativeLoads[opId]?.[opName] || 0;
+            });
+            return operativeData;
+        });
         
         const newChartConfig: ChartConfig = {};
-        const newOperativeSummary: {operative: string; totalMinutes: number, utilization: number, efficiency: number}[] = [];
-
-        Object.keys(operativeLoads).sort().forEach(opId => {
-            const opKey = opId.replace(' ', '').toLowerCase();
-            newChartConfig[opKey] = { label: opId, color: operativeColors[opId] || 'hsl(var(--chart-1))' };
-
-            const totalMinutes = operativeLoads[opId] || 0;
+        allOperations.forEach(opName => {
+            newChartConfig[opName] = {
+                label: opName,
+                color: operationColors[opName] || operationColors.default,
+            };
+        });
+        
+        const newOperativeSummary = allOperatives.map(opId => {
+            const totalMinutes = operativeTotalTimes[opId] || 0;
+            const levelingUnit = totalLevelingTime > 0 ? totalLevelingTime / numOperatives : 0;
             const opUtilization = levelingUnit > 0 ? (totalMinutes / levelingUnit) * 100 : 0;
-            
-            newOperativeSummary.push({
+             return {
                 operative: opId,
                 totalMinutes: totalMinutes,
                 utilization: opUtilization,
-                efficiency: 100 // Placeholder, as efficiency per operative is more complex
-            })
+                efficiency: 100 // Placeholder
+            }
         });
 
         return {
@@ -127,7 +164,8 @@ export default function ReportsPage() {
             },
             operativeLoadData: chartData,
             chartConfig: newChartConfig,
-            operativeSummary: newOperativeSummary
+            operativeSummary: newOperativeSummary,
+            allOperations,
         };
 
     }, [selectedOrders, orders]);
@@ -244,19 +282,18 @@ export default function ReportsPage() {
                         <XAxis 
                             type="number" 
                             tick={{ fill: 'hsl(var(--foreground))' }}
-                            domain={[0, 'dataMax + 20']}
                         />
                         <Tooltip content={<ChartTooltipContent />} cursor={{fill: 'hsl(var(--muted))'}} />
-                        <Legend content={() => null} />
-                        <Bar 
-                            dataKey="load" 
-                            name="Carga (min)"
-                            radius={[4, 4, 4, 4]}
-                        >
-                             {operativeLoadData.map((entry, index) => (
-                                <YAxis key={`cell-${index}`} fill={operativeColors[entry.operative] || '#8884d8'} />
-                            ))}
-                        </Bar>
+                        <ChartLegend content={<ChartLegendContent />} />
+                        {allOperations.map((opName) => (
+                           <Bar
+                                key={opName}
+                                dataKey={opName}
+                                stackId="a"
+                                fill={chartConfig[opName]?.color}
+                                radius={[4, 4, 4, 4]}
+                           />
+                        ))}
                     </BarChart>
                 </ChartContainer>
                 </CardContent>
@@ -298,3 +335,4 @@ export default function ReportsPage() {
   );
 }
 
+    

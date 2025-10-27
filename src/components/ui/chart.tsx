@@ -141,7 +141,7 @@ const ChartTooltipContent = React.forwardRef<
       const [item] = payload
       const key = `${labelKey || item.dataKey || item.name || "value"}`
       const itemConfig = getPayloadConfigFromPayload(config, item, key)
-      const value =
+      let value =
         !labelKey && typeof label === "string"
           ? config[label as keyof typeof config]?.label || label
           : itemConfig?.label
@@ -153,6 +153,12 @@ const ChartTooltipContent = React.forwardRef<
           </div>
         )
       }
+      
+      // Use the 'operative' field from the payload for the label
+      if (item.payload.operative) {
+        value = item.payload.operative;
+      }
+
 
       if (!value) {
         return null
@@ -188,7 +194,7 @@ const ChartTooltipContent = React.forwardRef<
           {payload.map((item, index) => {
             const key = `${nameKey || item.name || item.dataKey || "value"}`
             const itemConfig = getPayloadConfigFromPayload(config, item, key)
-            const indicatorColor = color || item.payload.fill || item.color
+            const indicatorColor = color || item.color
 
             return (
               <div
@@ -240,7 +246,7 @@ const ChartTooltipContent = React.forwardRef<
                       </div>
                       {item.value && (
                         <span className="font-mono font-medium tabular-nums text-foreground">
-                          {item.value.toLocaleString()}
+                          {typeof item.value === 'number' ? item.value.toFixed(2) : item.value}
                         </span>
                       )}
                     </div>
@@ -363,3 +369,5 @@ export {
   ChartLegendContent,
   ChartStyle,
 }
+
+    
