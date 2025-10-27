@@ -93,8 +93,9 @@ export default function ReportsPage() {
             clients.add(order.nombreCliente);
             orderIds.add(order.id);
 
+            let orderMakespan = 0;
             order.stats?.forEach(stat => {
-                totalMakespan += stat.totalSam * stat.loteSize;
+                orderMakespan += stat.totalSam * stat.loteSize;
                 totalUnits += stat.loteSize;
                 totalLoteSize += stat.loteSize;
 
@@ -105,6 +106,8 @@ export default function ReportsPage() {
                     timeByMachine[op.maquina] = (timeByMachine[op.maquina] || 0) + time;
                 });
             });
+            totalMakespan += orderMakespan;
+
 
             order.items.forEach(item => {
                 const desc = mockProducts.find(p => p.referencia === item.referencia)?.descripcion || 'N/A';
@@ -512,3 +515,4 @@ export default function ReportsPage() {
     </div>
   );
 }
+
