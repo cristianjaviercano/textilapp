@@ -2,15 +2,15 @@
 
 import React, { useState, useMemo } from 'react';
 import {
-  Scatter,
-  ScatterChart,
-  CartesianGrid,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
+  CartesianGrid,
   Tooltip,
   Legend,
   ResponsiveContainer,
-  Label
+  Label,
 } from 'recharts';
 import {
   Card,
@@ -50,20 +50,20 @@ export default function ReportsPage() {
     
     const numSelectedOrders = Object.values(selectedOrders).filter(Boolean).length;
 
-    const { kpis, ganttData, chartConfig, operativeSummary, allOperations, allOperatives } = useMemo(() => {
+    const { kpis, barChartData, chartConfig, operativeSummary, allOperations, allOperatives } = useMemo(() => {
         const activeOrderIds = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
         if (activeOrderIds.length === 0) {
-            return { kpis: { makespan: 0, utilization: 0, efficiency: 0, unitsPerHour: 0 }, ganttData: [], chartConfig: {}, operativeSummary: [], allOperations: [], allOperatives: [] };
+            return { kpis: { makespan: 0, utilization: 0, efficiency: 0, unitsPerHour: 0 }, barChartData: [], chartConfig: {}, operativeSummary: [], allOperations: [], allOperatives: [] };
         }
 
         const relevantOrders = orders.filter(o => activeOrderIds.includes(o.id));
         
-        const operativeTasks: Record<string, {taskId: string, assignedTime: number, consecutivo: number, operationName: string, unitSam: number}[]> = {};
+        const operativeTasks: Record<string, {taskId: string, assignedTime: number, operationName: string, unitSam: number}[]> = {};
+        const operationsSet = new Set<string>();
         let totalAssignedSam = 0;
         let totalRequiredSam = 0;
         let totalUnits = 0;
         let totalLevelingTime = 0;
-        const operationsSet = new Set<string>();
 
         relevantOrders.forEach(order => {
             if (order.assignments) {
@@ -80,7 +80,6 @@ export default function ReportsPage() {
                         operativeTasks[opId].push({
                           taskId,
                           assignedTime,
-                          consecutivo: productOp.consecutivo,
                           operationName,
                           unitSam: productOp.sam
                         });
@@ -107,8 +106,6 @@ export default function ReportsPage() {
             }
         }
         
-        const operativeTotalTimes: Record<string, number> = {};
-        const ganttData: any[] = [];
         const newChartConfig = Array.from(operationsSet).reduce((acc, opName) => {
             acc[opName] = {
                 label: opName,
@@ -117,30 +114,21 @@ export default function ReportsPage() {
             return acc;
         }, {} as ChartConfig);
 
+        const operativeLoadByName: Record<string, Record<string, number>> = {};
         allOperatives.forEach(opId => {
-          if (!operativeTasks[opId]) return;
-          operativeTasks[opId].sort((a,b) => a.consecutivo - b.consecutivo);
-
-          let currentTime = 0;
-          let operativeTotalTime = 0;
-
-          operativeTasks[opId].forEach(task => {
-            const taskDuration = task.unitSam;
-            const startTime = currentTime;
-            const endTime = startTime + taskDuration;
-            
-            ganttData.push({
-              operative: opId,
-              operation: task.operationName,
-              time: [startTime, endTime],
-              duration: taskDuration,
-              fill: newChartConfig[task.operationName]?.color || '#8884d8'
+            operativeLoadByName[opId] = { name: opId };
+            operationsSet.forEach(opName => {
+                operativeLoadByName[opId][opName] = 0;
             });
-            
-            currentTime = endTime;
-            operativeTotalTime += taskDuration;
-          });
-          operativeTotalTimes[opId] = operativeTotalTime;
+            operativeTasks[opId].forEach(task => {
+                operativeLoadByName[opId][task.operationName] += task.assignedTime;
+            });
+        });
+        const barChartData = Object.values(operativeLoadByName);
+
+        const operativeTotalTimes: Record<string, number> = {};
+        allOperatives.forEach(opId => {
+            operativeTotalTimes[opId] = (operativeTasks[opId] || []).reduce((sum, task) => sum + task.assignedTime, 0);
         });
         
         const makespan = Math.max(0, ...Object.values(operativeTotalTimes));
@@ -157,9 +145,14 @@ export default function ReportsPage() {
             const levelingUnit = totalLevelingTime > 0 ? totalLevelingTime / numOperatives : 0;
             const opUtilization = levelingUnit > 0 ? (totalMinutes / levelingUnit) * 100 : 0;
             
-            const assignedSamForOperative = operativeTasks[opId].reduce((sum, task) => sum + task.assignedTime, 0);
-            const requiredSamForOperative = operativeTasks[opId].reduce((sum, task) => sum + task.unitSam, 0);
-            const opEfficiency = assignedSamForOperative > 0 ? (requiredSamForOperative / assignedSamForOperative) * 100 : 0;
+            const requiredSamForOperative = (operativeTasks[opId] || []).reduce((sum, task) => {
+                const order = relevantOrders.find(o => o.assignments && o.assignments[task.taskId]);
+                const unitsPerHour = (order?.stats || []).find(s => s.descripcion === mockProducts.find(p => task.taskId.includes(p.descripcion))?.descripcion)?.unitsPerHour || 0;
+                return sum + task.unitSam * unitsPerHour;
+            }, 0);
+            
+            const assignedSamForOperative = operativeTotalTimes[opId];
+            const opEfficiency = requiredSamForOperative > 0 && assignedSamForOperative > 0 ? (requiredSamForOperative / assignedSamForOperative) * 100 : 0;
 
              return {
                 operative: opId,
@@ -176,7 +169,7 @@ export default function ReportsPage() {
                 efficiency,
                 unitsPerHour
             },
-            ganttData,
+            barChartData,
             chartConfig: newChartConfig,
             operativeSummary: newOperativeSummary,
             allOperations,
@@ -184,22 +177,6 @@ export default function ReportsPage() {
         };
 
     }, [selectedOrders, orders]);
-
-    const CustomTooltip = ({ active, payload }: any) => {
-      if (active && payload && payload.length) {
-        const data = payload[0].payload;
-        return (
-          <div className="bg-background border p-2 rounded shadow-lg text-sm">
-            <p className="font-bold">{`Operario: ${data.operative}`}</p>
-            <p>{`Operación: ${data.operation}`}</p>
-            <p>{`Inicio: ${data.time[0].toFixed(2)} min`}</p>
-            <p>{`Fin: ${data.time[1].toFixed(2)} min`}</p>
-            <p>{`Duración (SAM Unit.): ${data.duration.toFixed(2)} min`}</p>
-          </div>
-        );
-      }
-      return null;
-    };
 
   return (
     <div className="space-y-6">
@@ -252,11 +229,11 @@ export default function ReportsPage() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Makespan (Tiempo de Ciclo Unitario)</CardTitle>
+                        <CardTitle className="text-sm font-medium">Makespan (Tiempo de Ciclo)</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{kpis.makespan.toFixed(2)} min</div>
-                        <p className="text-xs text-muted-foreground">Tiempo máx. para completar una unidad</p>
+                        <p className="text-xs text-muted-foreground">Tiempo máx. por operario</p>
                     </CardContent>
                 </Card>
                 <Card>
@@ -290,51 +267,35 @@ export default function ReportsPage() {
 
             <Card>
                 <CardHeader>
-                <CardTitle>Diagrama de Gantt de Carga por Operario (Unitario)</CardTitle>
+                <CardTitle>Diagrama de Gantt de Carga por Operario</CardTitle>
                 <CardDescription>
-                    Este gráfico muestra la secuencia de operaciones (tareas) para una unidad, asignadas a cada operario a lo largo del tiempo.
+                    Este gráfico muestra el tiempo total (en minutos) asignado a cada operario, desglosado por operación.
                 </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ChartContainer config={chartConfig} className="min-h-[400px] w-full">
-                    <ScatterChart
-                        margin={{
-                            top: 20,
-                            right: 20,
-                            bottom: 20,
-                            left: 20,
-                        }}
-                    >
-                        <CartesianGrid />
-                        <XAxis type="number" dataKey="time[0]" name="Tiempo" unit=" min" domain={[0, 'dataMax']}>
-                          <Label value="Tiempo (minutos)" offset={-10} position="insideBottom" />
-                        </XAxis>
-                        <YAxis type="category" dataKey="operative" name="Operario" domain={allOperatives} reversed={true} interval={0} />
-                        <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
-                        <Legend content={<ChartLegendContent />} />
-                        {allOperations.map((op) => (
-                           <Scatter 
-                            key={op}
-                            name={op}
-                            data={ganttData.filter(d => d.operation === op)}
-                            fill={chartConfig[op]?.color}
-                            shape={({ cx, cy, ...props }) => {
-                                const { payload } = props;
-                                if (!payload || !payload.time) return null;
-                                const [start, end] = payload.time;
-                                const xAxis = props.xAxis as any;
-                                const width = xAxis.scale(end) - xAxis.scale(start);
-                                
-                                if(width <= 0) return null;
-
-                                const y = cy - 10;
-                                const x = xAxis.scale(start);
-
-                                return <rect x={x} y={y} width={width} height={20} fill={payload.fill} />;
-                            }}
-                           />
-                        ))}
-                    </ScatterChart>
+                    <BarChart layout="vertical" data={barChartData} stackOffset="none">
+                      <CartesianGrid horizontal={false} />
+                      <YAxis
+                        dataKey="name"
+                        type="category"
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <XAxis dataKey="total" type="number">
+                        <Label value="Tiempo (minutos)" offset={-10} position="insideBottom" />
+                      </XAxis>
+                      <Tooltip content={<ChartTooltipContent />} cursor={{fill: 'hsl(var(--muted))'}} />
+                      <Legend content={<ChartLegendContent />} />
+                      {allOperations.map((op) => (
+                        <Bar
+                          key={op}
+                          dataKey={op}
+                          stackId="a"
+                          fill={chartConfig[op]?.color}
+                        />
+                      ))}
+                    </BarChart>
                   </ChartContainer>
                 </CardContent>
             </Card>
@@ -351,7 +312,7 @@ export default function ReportsPage() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Operario</TableHead>
-                                <TableHead className="text-right">Minutos Asignados (Unitario)</TableHead>
+                                <TableHead className="text-right">Minutos Asignados</TableHead>
                                 <TableHead className="text-right">Utilización (%)</TableHead>
                                 <TableHead className="text-right">Eficiencia (%)</TableHead>
                             </TableRow>
