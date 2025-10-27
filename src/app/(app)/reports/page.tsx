@@ -66,7 +66,7 @@ export default function ReportsPage() {
         operativeSummary,
         orderSummary,
         allOperativesWithTasks,
-        operativeYMap
+        operativeYMap,
     } = useMemo(() => {
         if (activeOrderIds.length === 0) {
             return {
@@ -182,8 +182,9 @@ export default function ReportsPage() {
                 maxTime = currentTime;
             }
         });
+        
         const ganttDomain = [0, Math.ceil(maxTime / 10) * 10 || 60];
-
+        
         const deliveryDates = relevantOrders.map(o => parseISO(o.fechaEntrega)).sort((a,b) => b.getTime() - a.getTime());
         const latestDeliveryDate = deliveryDates[0];
         const productionDays = totalMakespan > 0 ? (totalMakespan / 60) / 8 : 0; // 8-hour workday
@@ -529,6 +530,7 @@ export default function ReportsPage() {
     </div>
   );
 }
+
 
 
 
