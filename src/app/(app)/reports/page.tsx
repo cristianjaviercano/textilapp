@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -175,7 +176,7 @@ export default function ReportsPage() {
                 maxTime = currentTime;
             }
         });
-        const ganttDomain = [0, Math.max(60, Math.ceil(maxTime / 10) * 10)];
+        const ganttDomain = [0, Math.ceil(maxTime / 10) * 10 || 60];
 
         const deliveryDates = relevantOrders.map(o => parseISO(o.fechaEntrega)).sort((a,b) => b.getTime() - a.getTime());
         const latestDeliveryDate = deliveryDates[0];
@@ -515,4 +516,5 @@ export default function ReportsPage() {
     </div>
   );
 }
+
 
