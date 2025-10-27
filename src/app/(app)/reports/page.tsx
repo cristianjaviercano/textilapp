@@ -102,7 +102,7 @@ export default function ReportsPage() {
 
         if(numOperatives > 0) {
             const firstOrderWithStats = relevantOrders.find(o => o.stats && o.stats.length > 0);
-            if (firstOrderWithStats?.stats) {
+            if (firstOrderWithStats?.stats && firstOrderWithStats.stats.length > 0) {
                  const levelingUnit = firstOrderWithStats.stats[0] ? 60 : 0; 
                  totalLevelingTime = numOperatives * levelingUnit;
             }
@@ -119,6 +119,7 @@ export default function ReportsPage() {
         }, {} as ChartConfig);
 
         allOperatives.forEach(opId => {
+          if (!operativeTasks[opId]) return;
           operativeTasks[opId].sort((a,b) => a.consecutivo - b.consecutivo);
 
           let currentTime = 0;
@@ -138,12 +139,12 @@ export default function ReportsPage() {
             });
             
             currentTime = endTime;
-            operativeTotalTime += task.assignedTime;
+            operativeTotalTime += taskDuration;
           });
           operativeTotalTimes[opId] = operativeTotalTime;
         });
         
-        const makespan = Math.max(0, ...ganttData.map(d => d.time[1]));
+        const makespan = Math.max(0, ...Object.values(operativeTotalTimes));
         const utilization = totalLevelingTime > 0 ? (totalAssignedSam / totalLevelingTime) * 100 : 0;
         const efficiency = totalRequiredSam > 0 ? (totalRequiredSam / totalAssignedSam) * 100 : 0;
         
@@ -312,18 +313,19 @@ export default function ReportsPage() {
                             key={op}
                             name={op}
                             data={ganttData.filter(d => d.operation === op)}
+                            fill={chartConfig[op]?.color}
                             shape={({ cx, cy, ...props }) => {
                                 const { payload } = props;
                                 const [start, end] = payload.time;
                                 const xAxis = props.xAxis as any;
                                 const width = xAxis.scale(end) - xAxis.scale(start);
                                 
-                                if(width < 0) return null;
+                                if(width <= 0) return null;
 
                                 const y = cy - 10;
                                 const x = xAxis.scale(start)
 
-                                return <rect x={x} y={y} width={width} height={20} fill={payload.fill} />;
+                                return <rect x={x} y={y} width={width} height={20} fill={props.fill} />;
                             }}
                            />
                         ))}
@@ -344,7 +346,7 @@ export default function ReportsPage() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Operario</TableHead>
-                                <TableHead className="text-right">Minutos Asignados</TableHead>
+                                <TableHead className="text-right">Minutos Asignados (Unitario)</TableHead>
                                 <TableHead className="text-right">Utilización (%)</TableHead>
                                 <TableHead className="text-right">Eficiencia (%)</TableHead>
                             </TableRow>
@@ -367,5 +369,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-    
