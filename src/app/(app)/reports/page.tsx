@@ -149,7 +149,7 @@ export default function ReportsPage() {
           newGanttConfig[op] = { label: op, color: generateColorFromString(op) };
         });
 
-        sortedOperatives.forEach((opId, index) => {
+        sortedOperatives.forEach((opId) => {
             let currentTime = 0;
             const tasks = (operativeTasks[opId] || []).sort((a, b) => a.consecutivo - b.consecutivo);
             tasks.forEach(task => {
@@ -158,7 +158,7 @@ export default function ReportsPage() {
                 if(endTime <= 60) {
                     ganttData.push({
                         x: [startTime, endTime],
-                        y: index,
+                        y: opId,
                         operative: opId,
                         operationName: task.operationName,
                         fill: newGanttConfig[task.operationName]?.color
@@ -321,7 +321,7 @@ export default function ReportsPage() {
             <h2 className="text-2xl font-bold font-headline pt-4">Diagramas</h2>
             <Separator />
             
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-1">
                 <Card>
                     <CardHeader>
                     <CardTitle>Diagrama de Gantt (SAM Unitario)</CardTitle>
@@ -334,7 +334,7 @@ export default function ReportsPage() {
                         <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                           <CartesianGrid />
                           <XAxis type="number" dataKey="x[0]" name="start" label={{ value: "Tiempo (min)", position: 'insideBottom', offset: -10 }} domain={[0, 60]} ticks={[0, 10, 20, 30, 40, 50, 60]} />
-                          <YAxis type="category" dataKey="operative" name="operative" interval={0} ticks={allOperativesWithTasks} label={{ value: 'Operarios', angle: -90, position: 'insideLeft' }} />
+                          <YAxis type="category" dataKey="y" name="operative" interval={0} ticks={allOperativesWithTasks} label={{ value: 'Operarios', angle: -90, position: 'insideLeft' }} />
                           <Tooltip cursor={{ strokeDasharray: '3 3' }} content={
                               <ChartTooltipContent
                                   className="w-[200px]"
@@ -360,14 +360,13 @@ export default function ReportsPage() {
                               const {payload} = props;
                               if (Array.isArray(payload.x) && typeof y === 'number' && payload.x.length === 2 && payload.fill) {
                                   const [x_start, x_end] = payload.x;
-                                  const width = x_end - x_start;
-                                  // This is a rough conversion from chart scale to pixel width for the shape.
-                                  // It assumes the XAxis domain [0,60] maps to the available chart width.
-                                  const domainWidth = 60;
-                                  const chartWidth = props.xAxis.width; // rough estimate
-                                  const pixelWidth = (width / domainWidth) * chartWidth;
                                   
-                                  return <Rectangle {...props} x={props.xAxis.scale(x_start)} y={y - 5} width={props.xAxis.scale(x_end) - props.xAxis.scale(x_start)} height={10} />;
+                                  if (props.xAxis?.scale) {
+                                      const startX = props.xAxis.scale(x_start);
+                                      const endX = props.xAxis.scale(x_end);
+                                      const width = endX - startX;
+                                      return <Rectangle {...props} x={startX} y={y - 5} width={width} height={10} />;
+                                  }
                               }
                               return null;
                           }} />
