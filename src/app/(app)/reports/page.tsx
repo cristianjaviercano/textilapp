@@ -12,7 +12,6 @@ import {
   ScatterChart,
   Scatter,
   Rectangle,
-  Legend
 } from 'recharts';
 import {
   Card,
@@ -26,16 +25,17 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import { Button } from '@/components/ui/button';
-import { Download, ChevronDown, CheckCircle, AlertTriangle, Clock, Users, CalendarCheck, Package, Clock4 } from 'lucide-react';
-import { ChartConfig } from '@/components/ui/chart';
+import { Download, ChevronDown, CheckCircle, AlertTriangle, Users, Package, Clock4 } from 'lucide-react';
+import { type ChartConfig } from '@/components/ui/chart';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import initialOrders from "@/data/orders.json";
 import { mockProducts } from '@/data/mock-data';
-import type { ProductionOrder, ProductStats, Product } from "@/lib/types";
+import type { ProductionOrder } from "@/lib/types";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { addDays, format, parseISO, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { Separator } from '@/components/ui/separator';
 
 const generateColorFromString = (str: string) => {
     let hash = 0;
@@ -73,7 +73,6 @@ export default function ReportsPage() {
         
         let totalMakespan = 0;
         let totalUnits = 0;
-        let totalUnitsPerDay = 0;
         let operativesWithAssignments = new Set<string>();
 
         // For Gantt
@@ -88,7 +87,6 @@ export default function ReportsPage() {
         const timeByActivity: Record<string, number> = {};
         const timeByMachine: Record<string, number> = {};
 
-
         relevantOrders.forEach(order => {
             clients.add(order.nombreCliente);
             orderIds.add(order.id);
@@ -97,7 +95,6 @@ export default function ReportsPage() {
                 totalMakespan += stat.totalSam * stat.loteSize;
                 totalUnits += stat.loteSize;
                 totalLoteSize += stat.loteSize;
-                totalUnitsPerDay += stat.unitsPerDay;
 
                 const productOps = mockProducts.filter(p => p.descripcion === stat.descripcion);
                 productOps.forEach(op => {
@@ -171,7 +168,7 @@ export default function ReportsPage() {
             });
         });
 
-        // Delivery Status
+        // Delivery Status & Units per day
         const deliveryDates = relevantOrders.map(o => parseISO(o.fechaEntrega)).sort((a,b) => b.getTime() - a.getTime());
         const latestDeliveryDate = deliveryDates[0];
         const productionDays = totalMakespan > 0 ? (totalMakespan / 60) / 8 : 0; // 8-hour workday
@@ -179,9 +176,9 @@ export default function ReportsPage() {
         let deliveryStatus = { status: 'N/A', diffDays: 0, estimatedDate: '', targetDate: '' };
 
         if(latestDeliveryDate) {
-            const diffDays = differenceInDays(estimatedEndDate, latestDeliveryDate);
+            const diffDays = differenceInDays(latestDeliveryDate, estimatedEndDate);
             let status = '';
-            if (diffDays <= 0) status = 'A tiempo';
+            if (diffDays >= 0) status = 'A tiempo';
             else status = 'Retrasado';
 
             deliveryStatus = {
@@ -191,6 +188,8 @@ export default function ReportsPage() {
                 targetDate: format(latestDeliveryDate, 'PPP', {locale: es}),
             };
         }
+        
+        const unitsPerDay = productionDays > 0 ? totalUnits / productionDays : 0;
 
         const activityLoadData = allOperativesWithTasks.map(opId => ({
             name: opId,
@@ -209,7 +208,7 @@ export default function ReportsPage() {
         }
         
         return {
-            kpis: { makespan: totalMakespan, personnelUtilization, unitsPerDay: totalUnitsPerDay, deliveryStatus },
+            kpis: { makespan: totalMakespan, personnelUtilization, unitsPerDay, deliveryStatus },
             ganttChartData: ganttData,
             ganttChartConfig: newGanttConfig,
             activityLoadData,
@@ -270,7 +269,7 @@ export default function ReportsPage() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Makespan (Tiempo de Ciclo)</CardTitle>
+                        <CardTitle className="text-sm font-medium">Makespan</CardTitle>
                         <Clock4 className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
@@ -314,7 +313,7 @@ export default function ReportsPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{kpis.unitsPerDay.toFixed(2)}</div>
-                        <p className="text-xs text-muted-foreground">Producción estimada por día</p>
+                        <p className="text-xs text-muted-foreground">Producción estimada por día de 8h</p>
                     </CardContent>
                 </Card>
             </div>
@@ -334,8 +333,8 @@ export default function ReportsPage() {
                       <ChartContainer config={ganttChartConfig} className="min-h-[400px] w-full">
                         <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                           <CartesianGrid />
-                          <XAxis type="number" dataKey="x[0]" name="start" label={{ value: "Tiempo (min)", position: 'insideBottom', offset: -10 }} domain={[0, 60]} />
-                          <YAxis type="category" dataKey="operative" name="operative" label={{ value: 'Operarios', angle: -90, position: 'insideLeft' }} />
+                          <XAxis type="number" dataKey="x[0]" name="start" label={{ value: "Tiempo (min)", position: 'insideBottom', offset: -10 }} domain={[0, 60]} ticks={[0, 10, 20, 30, 40, 50, 60]} />
+                           <YAxis type="category" dataKey="operative" name="operative" interval={0} ticks={Array.from(operativeSummary.reduce((acc, op) => acc.add(op.operative), new Set<string>())).sort()} label={{ value: 'Operarios', angle: -90, position: 'insideLeft' }} />
                           <Tooltip cursor={{ strokeDasharray: '3 3' }} content={
                               <ChartTooltipContent
                                   className="w-[200px]"
@@ -343,10 +342,11 @@ export default function ReportsPage() {
                                   formatter={(value, name, props) => {
                                       const { payload } = props;
                                       return (
-                                          <div className="flex flex-col gap-1">
+                                          <div className="flex flex-col gap-1 text-xs">
                                               <span className='font-bold'>{payload.operationName}</span>
                                               <span>Inicio: {payload.x[0].toFixed(2)} min</span>
                                               <span>Fin: {payload.x[1].toFixed(2)} min</span>
+                                              <span>Dur: {(payload.x[1] - payload.x[0]).toFixed(2)} min</span>
                                           </div>
                                       );
                                   }}
@@ -378,7 +378,7 @@ export default function ReportsPage() {
                         <BarChart data={activityLoadData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                           <CartesianGrid vertical={false} />
                           <XAxis dataKey="name" />
-                          <YAxis label={{ value: 'Nº Actividades', angle: -90, position: 'insideLeft' }} />
+                          <YAxis allowDecimals={false} label={{ value: 'Nº Actividades', angle: -90, position: 'insideLeft' }} />
                           <Tooltip content={<ChartTooltipContent />} />
                           <Bar dataKey="actividades" fill="hsl(var(--primary))" radius={4} />
                         </BarChart>
@@ -457,10 +457,11 @@ export default function ReportsPage() {
                                             <TableHeader>
                                                 <TableRow>
                                                     <TableHead>Sec</TableHead>
-                                                    <TableHead>Operación</TableHead>
                                                     <TableHead>Producto</TableHead>
-                                                     <TableHead>Cliente</TableHead>
+                                                    <TableHead>Cliente</TableHead>
+                                                    <TableHead>Operación</TableHead>
                                                     <TableHead>Máquina</TableHead>
+                                                    <TableHead>Lote</TableHead>
                                                     <TableHead className="text-right">Tiempo Asignado (min)</TableHead>
                                                 </TableRow>
                                             </TableHeader>
@@ -468,17 +469,18 @@ export default function ReportsPage() {
                                                 {operativeSummary.filter(t => t.operative === opId).sort((a,b) => a.consecutivo - b.consecutivo).map((task, index) => (
                                                     <TableRow key={`${task.taskId}-${index}`}>
                                                         <TableCell>{task.consecutivo}</TableCell>
-                                                        <TableCell>{task.operationName}</TableCell>
                                                         <TableCell>{task.product}</TableCell>
                                                         <TableCell>{task.client}</TableCell>
+                                                        <TableCell>{task.operationName}</TableCell>
                                                         <TableCell>{task.maquina}</TableCell>
+                                                        <TableCell>{task.loteSize}</TableCell>
                                                         <TableCell className="text-right">{task.assignedTime.toFixed(2)}</TableCell>
                                                     </TableRow>
                                                 ))}
                                             </TableBody>
                                             <TableFooter>
                                                 <TableRow>
-                                                    <TableCell colSpan={5} className="text-right font-bold">Tiempo Total Asignado:</TableCell>
+                                                    <TableCell colSpan={6} className="text-right font-bold">Tiempo Total Asignado:</TableCell>
                                                     <TableCell className="text-right font-bold">{operativeSummary.filter(t => t.operative === opId).reduce((sum, task) => sum + task.assignedTime, 0).toFixed(2)} min</TableCell>
                                                 </TableRow>
                                             </TableFooter>
