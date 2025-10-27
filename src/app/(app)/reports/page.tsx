@@ -60,6 +60,7 @@ export default function ReportsPage() {
         kpis, 
         ganttChartData,
         ganttChartConfig,
+        ganttDomain,
         activityLoadData,
         operativeSummary,
         orderSummary,
@@ -68,7 +69,7 @@ export default function ReportsPage() {
         if (activeOrderIds.length === 0) {
             return {
               kpis: { makespan: 0, personnelUtilization: 0, unitsPerDay: 0, deliveryStatus: { status: 'N/A', diffDays: 0, estimatedDate: '', targetDate: '' }},
-              ganttChartData: [], ganttChartConfig: {}, activityLoadData: [], operativeSummary: [],
+              ganttChartData: [], ganttChartConfig: {}, ganttDomain: [0, 60], activityLoadData: [], operativeSummary: [],
               orderSummary: { clients: [], orderIds: [], products: [], totalLoteSize: 0, timeByActivity: [], timeByMachine: [] },
               allOperativesWithTasks: [],
             };
@@ -149,24 +150,29 @@ export default function ReportsPage() {
           newGanttConfig[op] = { label: op, color: generateColorFromString(op) };
         });
 
+        let maxTime = 0;
         sortedOperatives.forEach((opId) => {
             let currentTime = 0;
             const tasks = (operativeTasks[opId] || []).sort((a, b) => a.consecutivo - b.consecutivo);
             tasks.forEach(task => {
                 const startTime = currentTime;
-                const endTime = startTime + task.unitSam;
-                if(endTime <= 60) {
-                    ganttData.push({
-                        x: [startTime, endTime],
-                        y: opId,
-                        operative: opId,
-                        operationName: task.operationName,
-                        fill: newGanttConfig[task.operationName]?.color
-                    });
-                }
+                const endTime = startTime + task.assignedTime;
+                
+                ganttData.push({
+                    x: [startTime, endTime],
+                    y: opId,
+                    operative: opId,
+                    operationName: task.operationName,
+                    fill: newGanttConfig[task.operationName]?.color
+                });
+                
                 currentTime = endTime;
             });
+            if (currentTime > maxTime) {
+                maxTime = currentTime;
+            }
         });
+        const ganttDomain = [0, Math.max(60, Math.ceil(maxTime / 10) * 10)];
 
         const deliveryDates = relevantOrders.map(o => parseISO(o.fechaEntrega)).sort((a,b) => b.getTime() - a.getTime());
         const latestDeliveryDate = deliveryDates[0];
@@ -210,13 +216,14 @@ export default function ReportsPage() {
             kpis: { makespan: totalMakespan, personnelUtilization, unitsPerDay, deliveryStatus },
             ganttChartData: ganttData,
             ganttChartConfig: newGanttConfig,
+            ganttDomain,
             activityLoadData,
             operativeSummary: newOperativeSummary,
             orderSummary: finalOrderSummary,
             allOperativesWithTasks: sortedOperatives,
         };
 
-    }, [selectedOrders, orders, activeOrderIds, relevantOrders]);
+    }, [activeOrderIds, relevantOrders]);
 
   return (
     <div className="space-y-8">
@@ -324,16 +331,16 @@ export default function ReportsPage() {
             <div className="grid gap-6 md:grid-cols-1">
                 <Card>
                     <CardHeader>
-                    <CardTitle>Diagrama de Gantt (SAM Unitario)</CardTitle>
+                    <CardTitle>Diagrama de Gantt (Carga Total por Operario)</CardTitle>
                     <CardDescription>
-                        Secuencia de operaciones por operario para una unidad (primeros 60 min).
+                        Secuencia y duración de las operaciones totales asignadas a cada operario.
                     </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <ChartContainer config={ganttChartConfig} className="min-h-[400px] w-full">
-                        <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                        <ScatterChart margin={{ top: 20, right: 40, bottom: 20, left: 20 }}>
                           <CartesianGrid />
-                          <XAxis type="number" dataKey="x[0]" name="start" label={{ value: "Tiempo (min)", position: 'insideBottom', offset: -10 }} domain={[0, 60]} ticks={[0, 10, 20, 30, 40, 50, 60]} />
+                          <XAxis type="number" dataKey="x[0]" name="start" label={{ value: "Tiempo (min)", position: 'insideBottom', offset: -10 }} domain={ganttDomain} />
                           <YAxis type="category" dataKey="y" name="operative" interval={0} ticks={allOperativesWithTasks} label={{ value: 'Operarios', angle: -90, position: 'insideLeft' }} />
                           <Tooltip cursor={{ strokeDasharray: '3 3' }} content={
                               <ChartTooltipContent
@@ -505,5 +512,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-    
