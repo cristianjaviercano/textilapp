@@ -147,8 +147,9 @@ export default function ReportsPage() {
             
             const requiredSamForOperative = (operativeTasks[opId] || []).reduce((sum, task) => {
                 const order = relevantOrders.find(o => o.assignments && o.assignments[task.taskId]);
-                const unitsPerHour = (order?.stats || []).find(s => s.descripcion === mockProducts.find(p => task.taskId.includes(p.descripcion))?.descripcion)?.unitsPerHour || 0;
-                return sum + task.unitSam * unitsPerHour;
+                const productDesc = mockProducts.find(p => task.taskId.includes(p.descripcion))?.descripcion;
+                const unitsForTask = (order?.stats || []).find(s => s.descripcion === productDesc)?.unitsPerHour || 0;
+                return sum + task.unitSam * unitsForTask;
             }, 0);
             
             const assignedSamForOperative = operativeTotalTimes[opId];
@@ -282,11 +283,11 @@ export default function ReportsPage() {
                         tickLine={false}
                         axisLine={false}
                       />
-                      <XAxis dataKey="total" type="number">
+                      <XAxis type="number">
                         <Label value="Tiempo (minutos)" offset={-10} position="insideBottom" />
                       </XAxis>
                       <Tooltip content={<ChartTooltipContent />} cursor={{fill: 'hsl(var(--muted))'}} />
-                      <Legend content={<ChartLegendContent />} />
+                      <ChartLegend content={<ChartLegendContent />} />
                       {allOperations.map((op) => (
                         <Bar
                           key={op}
