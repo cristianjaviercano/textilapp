@@ -3,7 +3,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: 'TextileFlow Scheduler',
+  title: 'TextileFlow Scheduler Offline',
   description: 'Programador de Tareas para Producción Textil',
 };
 

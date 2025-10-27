@@ -43,7 +43,7 @@ function AppSidebar() {
       <SidebarHeader>
         <div className="flex items-center justify-between">
           <h1 className="font-headline font-bold text-xl group-data-[collapsible=icon]:hidden">
-            TextileFlow
+            TextileFlow Offline
           </h1>
           <SidebarTrigger />
         </div>
