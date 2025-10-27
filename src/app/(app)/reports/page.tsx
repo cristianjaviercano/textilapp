@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useMemo, useRef } from 'react';
+import ReactDOM from 'react-dom/client';
 import {
   BarChart,
   Bar,
@@ -49,6 +50,114 @@ const generateColorFromString = (str: string) => {
     const hue = hash % 360;
     return `hsl(${hue}, 70%, 50%)`;
 };
+
+
+// Componente para el encabezado del PDF
+const PdfHeader = ({ kpis, orderSummary }: { kpis: any, orderSummary: any }) => (
+    <div className="p-8 bg-white">
+        <h1 className="text-2xl font-bold font-headline mb-4">Informe de Producción</h1>
+        <div className="grid gap-4 md:grid-cols-4 mb-4">
+             <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Makespan</CardTitle>
+                    <Clock4 className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-xl font-bold">{kpis.makespan.toFixed(2)} min</div>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Utilización de Personal</CardTitle>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-xl font-bold">{kpis.personnelUtilization.toFixed(2)}%</div>
+                </CardContent>
+            </Card>
+             <Card className={
+                kpis.deliveryStatus.status === 'A tiempo' ? 'bg-green-50 border-green-200' :
+                kpis.deliveryStatus.status === 'Retrasado' ? 'bg-red-50 border-red-200' : ''
+            }>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Cumplimiento</CardTitle>
+                     {kpis.deliveryStatus.status === 'A tiempo' && <CheckCircle className="h-4 w-4 text-green-600" />}
+                     {kpis.deliveryStatus.status === 'Retrasado' && <AlertTriangle className="h-4 w-4 text-red-600" />}
+                </CardHeader>
+                <CardContent>
+                    <div className={`text-xl font-bold ${
+                        kpis.deliveryStatus.status === 'A tiempo' ? 'text-green-700' : 'text-red-700'
+                    }`}>{kpis.deliveryStatus.status}</div>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Unidades / Día</CardTitle>
+                    <Package className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-xl font-bold">{kpis.unitsPerDay.toFixed(2)}</div>
+                </CardContent>
+            </Card>
+        </div>
+        <Card>
+            <CardHeader><CardTitle>Resumen de Orden</CardTitle></CardHeader>
+            <CardContent className="text-sm">
+                 <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                    <div>
+                        <p><strong>Cliente(s):</strong> {orderSummary.clients.join(', ')}</p>
+                        <p><strong>Orden(es):</strong> {orderSummary.orderIds.join(', ')}</p>
+                    </div>
+                     <div>
+                        <p><strong>Tamaño Total Lote:</strong> {orderSummary.totalLoteSize} unidades</p>
+                        <p><strong>Fecha Fin Estimada:</strong> {kpis.deliveryStatus.estimatedDate}</p>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+        <Separator className="my-6" />
+    </div>
+);
+
+
+// Componente para el detalle del operario en el PDF
+const PdfOperativeDetail = ({ opId, tasks }: { opId: string, tasks: any[] }) => (
+    <div className="p-8 pt-0 bg-white">
+        <h2 className="text-xl font-bold font-headline mb-2">Detalle de Asignación: {opId}</h2>
+        <Table>
+            <TableHeader>
+                <TableRow>
+                    <TableHead>Sec</TableHead>
+                    <TableHead>Producto (Ref)</TableHead>
+                    <TableHead>Cliente (Orden)</TableHead>
+                    <TableHead>Operación</TableHead>
+                    <TableHead>Máquina</TableHead>
+                    <TableHead>SAM Unit.</TableHead>
+                    <TableHead className="text-right">Tiempo Asignado (min)</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {tasks.sort((a,b) => a.consecutivo - b.consecutivo).map((task, index) => (
+                    <TableRow key={`${task.taskId}-${index}`}>
+                        <TableCell>{task.consecutivo}</TableCell>
+                        <TableCell><div>{task.product}</div><div className="text-xs text-muted-foreground">{task.productRef}</div></TableCell>
+                        <TableCell><div>{task.client}</div><div className="text-xs text-muted-foreground">{task.orderId}</div></TableCell>
+                        <TableCell>{task.operationName}</TableCell>
+                        <TableCell>{task.maquina}</TableCell>
+                        <TableCell>{task.unitSam.toFixed(2)}</TableCell>
+                        <TableCell className="text-right">{task.assignedTime.toFixed(2)}</TableCell>
+                    </TableRow>
+                ))}
+            </TableBody>
+            <TableFooter>
+                <TableRow>
+                    <TableCell colSpan={6} className="text-right font-bold">Tiempo Total Asignado:</TableCell>
+                    <TableCell className="text-right font-bold">{tasks.reduce((sum, task) => sum + task.assignedTime, 0).toFixed(2)} min</TableCell>
+                </TableRow>
+            </TableFooter>
+        </Table>
+    </div>
+);
 
 
 export default function ReportsPage() {
@@ -249,76 +358,65 @@ export default function ReportsPage() {
     };
 
     const handleExportPdf = async () => {
-        const mainReportElement = reportRef.current;
-        if (!mainReportElement) return;
-
         setIsGeneratingPdf(true);
-
-        // --- Create a clone of the report element to manipulate for PDF generation ---
-        const clone = mainReportElement.cloneNode(true) as HTMLElement;
-        clone.style.position = 'absolute';
-        clone.style.left = '-9999px'; // Move it off-screen
-        clone.style.width = '800px'; // A fixed width for consistent layout
-        clone.style.top = '0';
-        document.body.appendChild(clone);
-
-        // --- Find and expand all accordion items in the clone ---
-        const accordionTriggers = clone.querySelectorAll('[data-radix-collection-item][data-state="closed"]');
-        accordionTriggers.forEach(trigger => {
-            const correspondingContent = trigger.nextElementSibling as HTMLElement | null;
-            if (correspondingContent) {
-                correspondingContent.style.display = 'block'; // Force display
-                correspondingContent.setAttribute('data-state', 'open');
-            }
-        });
-        
-        // Give a moment for styles to apply
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
         const pdf = new jsPDF('p', 'pt', 'letter');
         const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
         const margin = 40;
         const availableWidth = pdfWidth - margin * 2;
+        const mainReportElement = reportRef.current;
 
-        try {
-            // --- Part 1: General Report (KPIs, Charts, Order Summary) ---
-            const generalInfoElement = clone.querySelector('#pdf-general-report') as HTMLElement;
-            if (generalInfoElement) {
-                const canvas = await html2canvas(generalInfoElement, { scale: 2, useCORS: true });
-                const imgData = canvas.toDataURL('image/png');
-                const imgHeight = (canvas.height * availableWidth) / canvas.width;
-                pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, imgHeight);
-            }
-
-            // --- Part 2: Operative Details (Each on new pages if necessary) ---
-            const operativeAccordionElement = clone.querySelector('#pdf-operative-summary') as HTMLElement;
-            if (operativeAccordionElement) {
-                const operativeItems = operativeAccordionElement.querySelectorAll<HTMLElement>('.pdf-operative-item');
-                for (const item of Array.from(operativeItems)) {
-                    pdf.addPage();
-                    const canvas = await html2canvas(item, { scale: 2, useCORS: true });
-                    const imgData = canvas.toDataURL('image/png');
-                    const imgHeight = (canvas.height * availableWidth) / canvas.width;
-                    
-                    // Check if it fits, though we are adding a new page for each anyway
-                    if (imgHeight > pdfHeight - margin * 2) {
-                         console.warn("Contenido de operario excede el tamaño de una página.");
-                    }
-                    
-                    pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, imgHeight);
-                }
-            }
-
-            pdf.save('reporte-produccion-detallado.pdf');
-
-        } catch (error) {
-            console.error("Error generating PDF:", error);
-        } finally {
-            // --- Cleanup ---
-            document.body.removeChild(clone);
-            setIsGeneratingPdf(false);
+        // 1. Render and add the main report page
+        if (mainReportElement) {
+             const canvas = await html2canvas(mainReportElement.querySelector('#pdf-general-report')!, { scale: 2, useCORS: true });
+             const imgData = canvas.toDataURL('image/png');
+             const imgHeight = (canvas.height * availableWidth) / canvas.width;
+             pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, imgHeight);
         }
+
+        // 2. Render each operative's detail page
+        const printContainer = document.createElement('div');
+        printContainer.style.position = 'absolute';
+        printContainer.style.left = '-9999px';
+        printContainer.style.width = '800px';
+        document.body.appendChild(printContainer);
+
+        for (const opId of allOperativesWithTasks) {
+            const operativeTasks = operativeSummary.filter(t => t.operative === opId);
+            if (operativeTasks.length === 0) continue;
+
+            pdf.addPage();
+            
+            const renderPromise = new Promise<void>((resolve) => {
+                const root = ReactDOM.createRoot(printContainer);
+                root.render(
+                    <React.StrictMode>
+                        <div className="bg-white text-black">
+                           <PdfHeader kpis={kpis} orderSummary={orderSummary} />
+                           <PdfOperativeDetail opId={opId} tasks={operativeTasks} />
+                        </div>
+                    </React.StrictMode>
+                , () => {
+                     setTimeout(async () => {
+                        try {
+                            const canvas = await html2canvas(printContainer, { scale: 2, useCORS: true, windowWidth: 800 });
+                            const imgData = canvas.toDataURL('image/png');
+                            const imgHeight = (canvas.height * availableWidth) / canvas.width;
+                            pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, imgHeight);
+                        } finally {
+                            root.unmount();
+                            resolve();
+                        }
+                    }, 200); // Small delay to ensure render completes
+                });
+            });
+
+            await renderPromise;
+        }
+
+        document.body.removeChild(printContainer);
+
+        pdf.save('reporte-produccion-detallado.pdf');
+        setIsGeneratingPdf(false);
     };
 
 
