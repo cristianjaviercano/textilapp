@@ -6,7 +6,7 @@ let assetPrefix = '';
 let basePath = '';
 
 if (isGithubActions) {
-  const repo = process.env.GITHUB_REPOSITORY.replace(/.*?\//, '');
+  const repo = process.env.GITHUB_REPOSITORY?.replace(/.*?\//, '') || 'textilapp';
   assetPrefix = `/${repo}/`;
   basePath = `/${repo}`;
 }
